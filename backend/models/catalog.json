@@ -1,0 +1,77 @@
+{
+    "bot_v1_baseline": {
+        "name": "Bot V1 Baseline",
+        "config": {
+            "epochs": 10,
+            "layers": 4,
+            "channels": 64,
+            "batch_size": 32,
+            "dropout": 0.0,
+            "lr": 0.001,
+            "discount": 0.99
+        },
+        "final_train_loss": 0.5511,
+        "final_val_loss": 0.6004,
+        "weight_path": "backend/models/bot_v1_baseline.pt"
+    },
+    "bot_v2_deep": {
+        "name": "Bot V2 Deep",
+        "config": {
+            "epochs": 20,
+            "layers": 8,
+            "channels": 128,
+            "batch_size": 128,
+            "dropout": 0.1,
+            "lr": 0.0005,
+            "discount": 0.99
+        },
+        "final_train_loss": 0.1271,
+        "final_val_loss": 0.2177,
+        "weight_path": "backend/models/bot_v2_deep.pt"
+    },
+    "bot_v3_fast": {
+        "name": "Bot V3 Fast",
+        "config": {
+            "epochs": 5,
+            "layers": 2,
+            "channels": 32,
+            "batch_size": 16,
+            "dropout": 0.0,
+            "lr": 0.01,
+            "discount": 0.95
+        },
+        "final_train_loss": 1.0357,
+        "final_val_loss": 1.0641,
+        "weight_path": "backend/models/bot_v3_fast.pt"
+    },
+    "bot_v4_dropout": {
+        "name": "Bot V4 Dropout",
+        "config": {
+            "epochs": 15,
+            "layers": 6,
+            "channels": 64,
+            "batch_size": 64,
+            "dropout": 0.3,
+            "lr": 0.001,
+            "discount": 0.99
+        },
+        "final_train_loss": 0.275,
+        "final_val_loss": 0.316,
+        "weight_path": "backend/models/bot_v4_dropout.pt"
+    },
+    "bot_random": {
+        "name": "Random Move Bot",
+        "config": {
+            "epochs": 0,
+            "layers": 0,
+            "channels": 0,
+            "batch_size": 0,
+            "dropout": 0,
+            "lr": 0,
+            "discount": 0
+        },
+        "final_train_loss": 0.0,
+        "final_val_loss": 0.0,
+        "weight_path": null
+    }
+}

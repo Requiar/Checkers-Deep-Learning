@@ -280,6 +280,25 @@ input[type=range]::-webkit-slider-runnable-track {
   line-height: 1.4;
 }
 
+/* Dropdowns */
+.dropdown {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.dropdown option {
+  background: #203a43;
+  color: white;
+}
+
 /* Legend */
 .legend {
   display: flex;

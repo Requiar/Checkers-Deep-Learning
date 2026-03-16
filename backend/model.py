@@ -18,10 +18,13 @@ class ResidualBlock(nn.Module):
         return F.relu(x)
 
 class CheckersNet(nn.Module):
-    def __init__(self, action_size=128, num_res_blocks=4, channels=64):
+    def __init__(self, action_size=128, num_res_blocks=4, channels=64, dropout_rate=0.0):
         super(CheckersNet, self).__init__()
         # Input: 5 channels x 8 x 8 
         # (empty, P1, P2, P1_King, P2_King)
+        self.num_res_blocks = num_res_blocks
+        self.channels = channels
+        self.dropout_rate = dropout_rate
         
         self.conv_in = nn.Conv2d(5, channels, kernel_size=3, padding=1)
         self.bn_in = nn.BatchNorm2d(channels)
@@ -39,6 +42,7 @@ class CheckersNet(nn.Module):
         self.value_conv = nn.Conv2d(channels, 1, kernel_size=1)
         self.value_bn = nn.BatchNorm2d(1)
         self.value_fc1 = nn.Linear(1 * 8 * 8, 32)
+        self.value_dropout = nn.Dropout(dropout_rate)
         self.value_fc2 = nn.Linear(32, 1)
 
     def forward(self, x):
@@ -55,6 +59,8 @@ class CheckersNet(nn.Module):
         v = F.relu(self.value_bn(self.value_conv(x)))
         v = v.reshape(v.size(0), -1)
         v = F.relu(self.value_fc1(v))
+        if self.dropout_rate > 0:
+            v = self.value_dropout(v)
         value = torch.tanh(self.value_fc2(v))
         
         return policy_logits, value

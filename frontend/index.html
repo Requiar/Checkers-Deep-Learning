@@ -17,9 +17,23 @@
     </header>
 
     <main class="game-area">
-      <div class="board-container">
-        <!-- Generates 8x8 Board Grid via JS -->
-        <div id="checkers-board" class="board"></div>
+      <div class="board-column" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="board-container">
+          <!-- Generates 8x8 Board Grid via JS -->
+          <div id="checkers-board" class="board"></div>
+        </div>
+        
+        <!-- Win Probability Bar -->
+        <div class="prob-container glassmorphism" style="padding: 1rem; border-radius: 12px; min-width: unset;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">
+            <span style="color: var(--primary-color);">Red Advantage</span>
+            <span style="color: var(--text-secondary);" id="prob-text">50% / 50%</span>
+            <span style="color: #e0e0e0;">White Advantage</span>
+          </div>
+          <div class="prob-bar-bg" style="width: 100%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; position: relative;">
+            <div id="prob-bar-fill" style="width: 50%; height: 100%; background: linear-gradient(90deg, var(--primary-color), #ff6b8b); transition: width 0.5s ease;"></div>
+          </div>
+        </div>
       </div>
 
       <aside class="control-panel glassmorphism">
@@ -29,7 +43,25 @@
         </div>
 
         <div class="controls">
-          <button id="btn-start" class="btn primary">Start New Game</button>
+          <div class="player-config" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+            <div style="flex: 1;">
+              <label style="font-size: 0.8rem; display: block; margin-bottom: 0.3rem;">Red Player (P1)</label>
+              <select id="p1-select" class="dropdown">
+                <option value="human">Human</option>
+              </select>
+            </div>
+            <div style="flex: 1;">
+              <label style="font-size: 0.8rem; display: block; margin-bottom: 0.3rem;">White Player (P2)</label>
+              <select id="p2-select" class="dropdown">
+                <option value="bot_v1_baseline">Bot V1 Baseline (Loading...)</option>
+              </select>
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 1rem;">
+             <button id="btn-start" class="btn primary" style="flex: 2;">Start Match</button>
+             <button id="btn-tourney" class="btn" style="flex: 1; background: rgba(255,255,255,0.1); color: white;">Run Tourney</button>
+          </div>
           
           <div class="slider-group">
             <div class="slider-header">
@@ -40,12 +72,19 @@
             <p class="help-text">Controls stochasticity. 0 = Greedy Play, >1 = Random/Exploratory</p>
           </div>
           
+          <div class="slider-group" style="padding-top: 0.5rem; border-top: none;">
+            <div class="slider-header">
+              <label for="depth-slider">MCTS Search Depth (# Sims)</label>
+              <span id="depth-value" class="badge">50</span>
+            </div>
+            <input type="range" id="depth-slider" min="10" max="500" step="10" value="50">
+          </div>
+          
           <div class="legend" style="align-items: center; justify-content: space-between;">
             <div style="display: flex; gap: 1.5rem;">
-                <div class="legend-item"><div class="piece p1"></div><span id="legend-p1-text">You (Red)</span></div>
-                <div class="legend-item"><div class="piece p2"></div><span id="legend-p2-text">Bot (White)</span></div>
+                <div class="legend-item"><div class="piece p1"></div><span id="legend-p1-text">Red</span></div>
+                <div class="legend-item"><div class="piece p2"></div><span id="legend-p2-text">White</span></div>
             </div>
-            <a href="#" id="color-toggle" style="font-size: 0.8rem; color: var(--secondary-color); text-decoration: none;">Play as White instead</a>
           </div>
           
           <div class="history-panel" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--glass-border);">

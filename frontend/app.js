@@ -2,35 +2,64 @@ const API_URL = 'http://localhost:8000/api';
 
 let gameState = null;
 let selectedPiece = null;
-let validMoves = []; // List of all valid move objects for the current turn
-let validDestinationsMap = {}; // Maps `${startR},${startC}` to a list of allowed end coordinates
+let validMoves = []; 
+let validDestinationsMap = {}; 
 
-// History
 let stateHistory = [];
 let currentHistoryIndex = -1;
 
-// Player Color Preference
-let playerIsRed = true;
-
-// Board Representation Map
-const EMPTY = 0;
-const P1 = 1;      // Human
-const P2 = 2;      // Bot
-const P1_KING = 3;
-const P2_KING = 4;
+let availableBots = [];
+let activeMatch = false;
 
 const boardElement = document.getElementById('checkers-board');
 const statusText = document.getElementById('game-status-text');
 const btnStart = document.getElementById('btn-start');
-const colorToggle = document.getElementById('color-toggle');
+const btnTourney = document.getElementById('btn-tourney');
+const p1Select = document.getElementById('p1-select');
+const p2Select = document.getElementById('p2-select');
 const legendP1Text = document.getElementById('legend-p1-text');
 const legendP2Text = document.getElementById('legend-p2-text');
 const tempSlider = document.getElementById('temperature-slider');
 const tempValue = document.getElementById('temp-value');
+const depthSlider = document.getElementById('depth-slider');
+const depthValue = document.getElementById('depth-value');
 const loadingOverlay = document.getElementById('loading-overlay');
 const btnPrev = document.getElementById('btn-prev');
 const btnNext = document.getElementById('btn-next');
 const btnCurrent = document.getElementById('btn-current');
+const probBarFill = document.getElementById('prob-bar-fill');
+const probText = document.getElementById('prob-text');
+
+// Board Represents
+const EMPTY = 0;
+const P1 = 1;      // Red
+const P2 = 2;      // White
+const P1_KING = 3;
+const P2_KING = 4;
+
+// Initialization
+async function initializeApp() {
+    try {
+        const response = await fetch(`${API_URL}/bots`);
+        const data = await response.json();
+        availableBots = data.bots;
+        
+        let botOptionsHTML = '';
+        availableBots.forEach(bot => {
+            botOptionsHTML += `<option value="${bot.id}">${bot.name} (Elo: ${Math.round(bot.elo)})</option>`;
+        });
+        
+        p1Select.innerHTML = `<option value="human">Human</option>` + botOptionsHTML;
+        p2Select.innerHTML = `<option value="human">Human</option>` + botOptionsHTML;
+        
+        // Default P2 to the baseline bot if it exists
+        if(availableBots.length > 0) p2Select.value = availableBots[0].id;
+        
+    } catch (err) {
+        console.error("Failed to load bots:", err);
+    }
+}
+window.addEventListener('DOMContentLoaded', initializeApp);
 
 function updateHistoryControls() {
     if (btnPrev && btnNext && btnCurrent) {
@@ -77,20 +106,96 @@ if (btnCurrent) {
     });
 }
 
-// UI Init
-colorToggle.addEventListener('click', (e) => {
-    e.preventDefault();
-    playerIsRed = !playerIsRed;
-    colorToggle.textContent = playerIsRed ? "Play as White instead" : "Play as Red instead";
-    legendP1Text.textContent = playerIsRed ? "You (Red)" : "Bot (Red)";
-    legendP2Text.textContent = playerIsRed ? "Bot (White)" : "You (White)";
-});
+tempSlider.addEventListener('input', (e) => tempValue.textContent = e.target.value);
+depthSlider.addEventListener('input', (e) => depthValue.textContent = e.target.value);
 
-tempSlider.addEventListener('input', (e) => {
-    tempValue.textContent = e.target.value;
-});
-
+btnTourney.addEventListener('click', runTournament);
 btnStart.addEventListener('click', startGame);
+
+async function updateWinProbability() {
+    if (!gameState) return;
+    
+    // Choose which bot evaluates the board. Default to whoever is P2, else P1.
+    let evaluatorId = p2Select.value !== "human" ? p2Select.value : (p1Select.value !== "human" ? p1Select.value : null);
+    
+    if(!evaluatorId) {
+        // If human vs human, we can't really evaluate easily without picking a random bot.
+        // Let's just pick the first available bot if it exists
+        if (availableBots.length > 0) evaluatorId = availableBots[0].id;
+        else return;
+    }
+    
+    try {
+        const payload = { state: gameState, bot_id: evaluatorId };
+        const response = await fetch(`${API_URL}/win-probability`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        // The endpoint returns win_probability from the perspective of the CURRENT player.
+        // We want to map this purely to Red (P1) vs White (P2).
+        let redAdvantage = data.win_probability;
+        if (gameState.current_player === P2) {
+             redAdvantage = 1.0 - redAdvantage;
+        }
+        
+        const redPct = Math.round(redAdvantage * 100);
+        const whitePct = 100 - redPct;
+        
+        probText.textContent = `${redPct}% / ${whitePct}%`;
+        probBarFill.style.width = `${redPct}%`;
+        
+    } catch (err) {
+        console.error("Failed to fetch win probability", err);
+    }
+}
+
+async function runTournament() {
+    if (p1Select.value === "human" || p2Select.value === "human") {
+        alert("Please select two AI Bots to run a tournament.");
+        return;
+    }
+    
+    activeMatch = false;
+    loadingOverlay.classList.remove('hidden');
+    
+    const numGames = prompt("How many games should they play?", "5");
+    if(!numGames) { loadingOverlay.classList.add('hidden'); return; }
+    
+    document.querySelector('#loading-overlay p').textContent = `Running ${numGames} tournament games in the cloud...`;
+    
+    try {
+        const payload = {
+            bot1_id: p1Select.value,
+            bot2_id: p2Select.value,
+            num_games: parseInt(numGames),
+            search_depth: parseInt(depthSlider.value),
+            temperature: parseFloat(tempSlider.value)
+        };
+        
+        const response = await fetch(`${API_URL}/tournament`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const results = await response.json();
+        
+        alert(`Tournament Complete!\n\n${results.bot1} (Red) Wins: ${results.wins_1}\n${results.bot2} (White) Wins: ${results.wins_2}\nDraws / Max Moves Reached: ${results.draws}\n\nNew Elo ${results.bot1}: ${Math.round(results.new_elo_1)}\nNew Elo ${results.bot2}: ${Math.round(results.new_elo_2)}`);
+        
+        // Refresh bots array to get new Elos
+        await initializeApp(); 
+        
+    } catch(err) {
+        console.error("Tournament Failed", err);
+        alert("Tournament Failed. Check console.");
+    } finally {
+        loadingOverlay.classList.add('hidden');
+        document.querySelector('#loading-overlay p').textContent = "Bot is thinking...";
+    }
+}
 
 async function startGame() {
     try {
@@ -100,22 +205,37 @@ async function startGame() {
         stateHistory = [JSON.parse(JSON.stringify(gameState))];
         currentHistoryIndex = 0;
         updateHistoryControls();
+        activeMatch = true;
         
-        // Hide the color toggle once game starts
-        colorToggle.style.display = 'none';
+        p1Select.disabled = true;
+        p2Select.disabled = true;
         
-        // If player chose white, let AI move first
-        if (!playerIsRed) {
-            await fetchValidMoves(); // Even if it's the bot's turn, we can fetch
-            requestBotMove();
-        } else {
-            await fetchValidMoves();
-            renderBoard();
-            updateStatus();
-        }
+        checkAndExecuteTurn();
     } catch (err) {
         console.error("Failed to start game:", err);
         statusText.textContent = "Server Error";
+    }
+}
+
+async function checkAndExecuteTurn() {
+    if (!activeMatch || !gameState || gameState.winner !== null) {
+        updateStatus();
+        p1Select.disabled = false;
+        p2Select.disabled = false;
+        return;
+    }
+    
+    await fetchValidMoves();
+    await updateWinProbability();
+    renderBoard();
+    updateStatus();
+
+    const isP1Turn = gameState.current_player === P1;
+    const currentConfig = isP1Turn ? p1Select.value : p2Select.value;
+    
+    if (currentConfig !== "human") {
+        // It's a bot's turn
+        requestBotMove(currentConfig);
     }
 }
 
@@ -145,10 +265,6 @@ async function fetchValidMoves() {
 
 function renderBoard() {
     boardElement.innerHTML = '';
-    
-    // Determine the mapped perspective
-    const playerPerspective = playerIsRed ? P1 : P2;
-    const botPerspective = playerIsRed ? P2 : P1;
 
     let allowedDestinations = [];
     if (selectedPiece) {
@@ -158,10 +274,9 @@ function renderBoard() {
         }
     }
 
-    for (let visualR = 0; visualR < 8; visualR++) {
-        for (let visualC = 0; visualC < 8; visualC++) {
-            const r = playerIsRed ? visualR : 7 - visualR;
-            const c = playerIsRed ? visualC : 7 - visualC;
+    // Always render with Red at the bottom (Standard Orientation)
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
             
             const cell = document.createElement('div');
             cell.dataset.r = r;
@@ -188,11 +303,7 @@ function renderBoard() {
                 piece.classList.add('piece');
                 piece.classList.add('anim-enter');
                 
-                // Color mapping: P1 is always visually at the bottom, P2 at the top.
-                // Wait, if playerIsRed=false, they are P2. 
-                // But the backend `checkers_logic` handles moves strictly with P1 going "up" (decreasing row)
-                // and P2 going "down" (increasing row). 
-                // To keep this simple visually, we just map the colors.
+                // Color mapping
                 if (pieceVal === P1 || pieceVal === P1_KING) piece.classList.add('p1');
                 if (pieceVal === P2 || pieceVal === P2_KING) piece.classList.add('p2');
                 if (pieceVal === P1_KING || pieceVal === P2_KING) piece.classList.add('king');
@@ -215,8 +326,13 @@ async function handleCellClick(r, c) {
     // Disable moves while in history review mode
     if (currentHistoryIndex !== stateHistory.length - 1) return;
     
-    const pID = playerIsRed ? P1 : P2;
-    if (gameState.current_player !== pID) return;
+    const isP1Turn = gameState.current_player === P1;
+    const currentConfig = isP1Turn ? p1Select.value : p2Select.value;
+    
+    // Validate human turn
+    if(currentConfig !== "human") return;
+    
+    const pID = gameState.current_player;
 
     const pieceVal = gameState.board[r][c];
     
@@ -280,32 +396,30 @@ async function attemptMove(moveObj) {
         updateHistoryControls();
         
         selectedPiece = null;
-        await fetchValidMoves();
-        renderBoard();
-        updateStatus();
-
-        const pID = playerIsRed ? P1 : P2;
-        const botID = playerIsRed ? P2 : P1;
-
-        if (gameState.winner === null && gameState.current_player === botID) {
-            requestBotMove();
-        }
+        checkAndExecuteTurn();
     } catch (err) {
         console.error("Move request failed", err);
     }
 }
 
-async function requestBotMove() {
+async function requestBotMove(botId) {
     loadingOverlay.classList.remove('hidden');
     statusText.textContent = "Bot is thinking...";
     
     const temperature = parseFloat(tempSlider.value);
+    const searchDepth = parseInt(depthSlider.value);
     
     try {
+        const payload = { 
+            state: gameState, 
+            temperature: temperature,
+            bot_id: botId,
+            search_depth: searchDepth
+        };
         const response = await fetch(`${API_URL}/bot-move`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state: gameState, temperature: temperature })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) throw new Error("Bot move failed");
@@ -320,9 +434,7 @@ async function requestBotMove() {
         // Minor delay for better UX
         setTimeout(async () => {
             loadingOverlay.classList.add('hidden');
-            await fetchValidMoves();
-            renderBoard();
-            updateStatus();
+            checkAndExecuteTurn();
         }, 500);
 
     } catch (err) {
@@ -333,21 +445,16 @@ async function requestBotMove() {
 }
 
 function updateStatus() {
-    const pID = playerIsRed ? P1 : P2;
-    
-    // Modify text string if playing in the past
     let prefix = currentHistoryIndex !== stateHistory.length - 1 ? "[REVIEW] " : "";
     
-    if (gameState.winner === pID) {
-        statusText.textContent = prefix + "You Win! 🎉";
-        statusText.style.color = "#00f2fe";
-        colorToggle.style.display = 'inline'; // Show toggle again when game ends
-    } else if (gameState.winner !== null && gameState.winner !== pID) {
-        statusText.textContent = prefix + "Bot Wins! 🤖";
+    if (gameState.winner === P1) {
+        statusText.textContent = prefix + "Red Wins! 🎉";
         statusText.style.color = "#ff3366";
-        colorToggle.style.display = 'inline'; // Show toggle again when game ends
+    } else if (gameState.winner === P2) {
+        statusText.textContent = prefix + "White Wins! 🤖";
+        statusText.style.color = "#e0e0e0";
     } else {
-        const turnText = gameState.current_player === pID ? "Your Turn" : "Bot's Turn";
+        const turnText = gameState.current_player === P1 ? "Red's Turn" : "White's Turn";
         statusText.textContent = prefix + turnText;
         statusText.style.color = "var(--text-secondary)";
     }
