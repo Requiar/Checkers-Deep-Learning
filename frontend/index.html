@@ -23,9 +23,14 @@
       </div>
 
       <aside class="control-panel glassmorphism">
-        <div class="status-box">
+        <div class="status-box" style="margin-bottom: 1rem;">
           <h2>Game Status</h2>
           <p id="game-status-text">Waiting to Start</p>
+          <div class="history-controls" style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem;">
+            <button id="btn-prev" class="btn" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Prev</button>
+            <button id="btn-current" class="btn primary" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Live</button>
+            <button id="btn-next" class="btn" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Next</button>
+          </div>
         </div>
 
         <div class="controls">
