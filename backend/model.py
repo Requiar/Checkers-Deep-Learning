@@ -1,0 +1,60 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+    def forward(self, x):
+        residual = x
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = self.bn2(self.conv2(x))
+        x += residual
+        return F.relu(x)
+
+class CheckersNet(nn.Module):
+    def __init__(self, action_size=128, num_res_blocks=4, channels=64):
+        super(CheckersNet, self).__init__()
+        # Input: 5 channels x 8 x 8 
+        # (empty, P1, P2, P1_King, P2_King)
+        
+        self.conv_in = nn.Conv2d(5, channels, kernel_size=3, padding=1)
+        self.bn_in = nn.BatchNorm2d(channels)
+        
+        self.res_blocks = nn.ModuleList([
+            ResidualBlock(channels) for _ in range(num_res_blocks)
+        ])
+        
+        # Policy Head
+        self.policy_conv = nn.Conv2d(channels, 2, kernel_size=1)
+        self.policy_bn = nn.BatchNorm2d(2)
+        self.policy_fc = nn.Linear(2 * 8 * 8, action_size)
+        
+        # Value Head
+        self.value_conv = nn.Conv2d(channels, 1, kernel_size=1)
+        self.value_bn = nn.BatchNorm2d(1)
+        self.value_fc1 = nn.Linear(1 * 8 * 8, 32)
+        self.value_fc2 = nn.Linear(32, 1)
+
+    def forward(self, x):
+        x = F.relu(self.bn_in(self.conv_in(x)))
+        for block in self.res_blocks:
+            x = block(x)
+            
+        # Policy
+        p = F.relu(self.policy_bn(self.policy_conv(x)))
+        p = p.reshape(p.size(0), -1)
+        policy_logits = self.policy_fc(p)
+        
+        # Value
+        v = F.relu(self.value_bn(self.value_conv(x)))
+        v = v.reshape(v.size(0), -1)
+        v = F.relu(self.value_fc1(v))
+        value = torch.tanh(self.value_fc2(v))
+        
+        return policy_logits, value

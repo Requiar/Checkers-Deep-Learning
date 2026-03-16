@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deep Learning Checkers</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <h1>Checkers <span>Deep Learning Engine</span></h1>
+      <p class="subtitle">Play against a neural network bot trained via Monte Carlo Tree Search</p>
+    </header>
+
+    <main class="game-area">
+      <div class="board-container">
+        <!-- Generates 8x8 Board Grid via JS -->
+        <div id="checkers-board" class="board"></div>
+      </div>
+
+      <aside class="control-panel glassmorphism">
+        <div class="status-box">
+          <h2>Game Status</h2>
+          <p id="game-status-text">Waiting to Start</p>
+        </div>
+
+        <div class="controls">
+          <button id="btn-start" class="btn primary">Start New Game</button>
+          
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="temperature-slider">Bot Temperature ($\tau$)</label>
+              <span id="temp-value" class="badge">0.5</span>
+            </div>
+            <input type="range" id="temperature-slider" min="0" max="2" step="0.1" value="0.5">
+            <p class="help-text">Controls stochasticity. 0 = Greedy Play, >1 = Random/Exploratory</p>
+          </div>
+          
+          <div class="legend">
+            <div class="legend-item"><div class="piece p1"></div><span>You (Red)</span></div>
+            <div class="legend-item"><div class="piece p2"></div><span>Bot (White)</span></div>
+          </div>
+        </div>
+
+        <div id="loading-overlay" class="hidden">
+          <div class="spinner"></div>
+          <p>Bot is thinking...</p>
+        </div>
+      </aside>
+    </main>
+  </div>
+  
+  <script src="app.js"></script>
+</body>
+</html>
