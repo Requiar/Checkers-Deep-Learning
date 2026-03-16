@@ -153,23 +153,16 @@ async function updateWinProbability() {
 }
 
 async function runTournament() {
-    if (p1Select.value === "human" || p2Select.value === "human") {
-        alert("Please select two AI Bots to run a tournament.");
-        return;
-    }
-    
     activeMatch = false;
     loadingOverlay.classList.remove('hidden');
     
-    const numGames = prompt("How many games should they play?", "5");
+    const numGames = prompt("How many games should EACH PAIR of bots play against each other?", "2");
     if(!numGames) { loadingOverlay.classList.add('hidden'); return; }
     
-    document.querySelector('#loading-overlay p').textContent = `Running ${numGames} tournament games in the cloud...`;
+    document.querySelector('#loading-overlay p').textContent = `Running ${numGames} games per pair in the cloud...`;
     
     try {
         const payload = {
-            bot1_id: p1Select.value,
-            bot2_id: p2Select.value,
             num_games: parseInt(numGames),
             search_depth: parseInt(depthSlider.value),
             temperature: parseFloat(tempSlider.value)
@@ -183,7 +176,17 @@ async function runTournament() {
         
         const results = await response.json();
         
-        alert(`Tournament Complete!\n\n${results.bot1} (Red) Wins: ${results.wins_1}\n${results.bot2} (White) Wins: ${results.wins_2}\nDraws / Max Moves Reached: ${results.draws}\n\nNew Elo ${results.bot1}: ${Math.round(results.new_elo_1)}\nNew Elo ${results.bot2}: ${Math.round(results.new_elo_2)}`);
+        let msg = `Tournament Complete! (${results.matches_played} total games)\n\n--- Elo Changes ---\n`;
+        for (const [botId, elo] of Object.entries(results.final_elos)) {
+             msg += `${botId}: ${elo}\n`;
+        }
+        
+        msg += `\n--- Matchups ---\n`;
+        results.matchups.forEach(m => {
+             msg += `${m.matchup} -> W1: ${m.bot1_wins}, W2: ${m.bot2_wins}, D: ${m.draws}\n`;
+        });
+        
+        alert(msg);
         
         // Refresh bots array to get new Elos
         await initializeApp(); 

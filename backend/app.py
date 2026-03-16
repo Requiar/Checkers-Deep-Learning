@@ -82,9 +82,7 @@ class WinProbRequest(BaseModel):
     bot_id: str = "bot_v1_baseline"
 
 class TournamentRequest(BaseModel):
-    bot1_id: str # Plays Red (P1)
-    bot2_id: str # Plays White (P2)
-    num_games: int = 5
+    num_games: int = 2 # games per pairing
     search_depth: int = 20
     temperature: float = 0.5
     max_moves: int = 150 # Prevent infinite loops
@@ -226,67 +224,89 @@ def get_win_probability(req: WinProbRequest):
 
 @app.post("/api/tournament")
 def run_tournament(req: TournamentRequest):
-    if req.bot1_id not in mcts_agents or req.bot2_id not in mcts_agents:
-        raise HTTPException(status_code=404, detail="One or more Bot IDs not found")
+    bot_ids = list(mcts_agents.keys())
+    if len(bot_ids) < 2:
+        raise HTTPException(status_code=400, detail="Not enough bots loaded to run a tournament.")
         
-    wins_1 = 0
-    wins_2 = 0
-    draws = 0
-    
-    agent1 = mcts_agents[req.bot1_id]
-    agent2 = mcts_agents[req.bot2_id]
-    
-    for game_idx in range(req.num_games):
-        env = CheckersEnvironment()
-        move_count = 0
-        
-        while env.winner is None and move_count < req.max_moves:
-            valid_moves = env.get_valid_moves()
-            if not valid_moves:
-                break # game over (no moves left)
-                
-            current_agent = agent1 if env.current_player == P1 else agent2
-            
-            if current_agent == "RANDOM":
-                import random
-                move = random.choice(valid_moves)
-            else:
-                current_agent.num_simulations = req.search_depth
-                move, _ = current_agent.get_action_prob(env.get_state(), temperature=req.temperature)
-                if move is None:
-                    break
-                    
-            env.make_move(move)
-            move_count += 1
-            
-        # Tally results
-        if env.winner == P1:
-            wins_1 += 1
-        elif env.winner == P2:
-            wins_2 += 1
-        else:
-            draws += 1 # Includes games that hit max_moves (stalemates)
-            
-    # Update global Elo ratings based on tournament games
     ranking = EloRanking(alpha=0.01)
     ranking.ratings = elo_ratings # load live dictionary
     
-    # Process each match sequentially
-    for _ in range(wins_1):
-        ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=1.0)
-    for _ in range(wins_2):
-        ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=0.0)
-    for _ in range(draws):
-        ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=0.5)
-        
+    results = []
+    
+    # Generate all unique pairs
+    for i in range(len(bot_ids)):
+        for j in range(i + 1, len(bot_ids)):
+            bot1_id = bot_ids[i]
+            bot2_id = bot_ids[j]
+            
+            agent1 = mcts_agents[bot1_id]
+            agent2 = mcts_agents[bot2_id]
+            
+            wins_1 = 0
+            wins_2 = 0
+            draws = 0
+            
+            # Run games between this pair
+            for game_idx in range(req.num_games):
+                env = CheckersEnvironment()
+                move_count = 0
+                
+                # Alternating sides for fairness
+                a_red, a_white = (agent1, agent2) if game_idx % 2 == 0 else (agent2, agent1)
+                id_red, id_white = (bot1_id, bot2_id) if game_idx % 2 == 0 else (bot2_id, bot1_id)
+                
+                while env.winner is None and move_count < req.max_moves:
+                    valid_moves = env.get_valid_moves()
+                    if not valid_moves:
+                        break # game over (no moves left)
+                        
+                    current_agent = a_red if env.current_player == P1 else a_white
+                    
+                    if current_agent == "RANDOM":
+                        import random
+                        move = random.choice(valid_moves)
+                    else:
+                        current_agent.num_simulations = req.search_depth
+                        move, _ = current_agent.get_action_prob(env.get_state(), temperature=req.temperature)
+                        if move is None:
+                            break
+                            
+                    env.make_move(move)
+                    move_count += 1
+                    
+                # Tally results for the pair mapping back to bot1 vs bot2
+                if env.winner == P1:
+                    if id_red == bot1_id: wins_1 += 1
+                    else: wins_2 += 1
+                elif env.winner == P2:
+                    if id_white == bot1_id: wins_1 += 1
+                    else: wins_2 += 1
+                else:
+                    draws += 1
+            
+            # Evaluate Elos for this pair
+            for _ in range(wins_1):
+                ranking.update_ratings(bot1_id, bot2_id, outcome_i=1.0)
+            for _ in range(wins_2):
+                ranking.update_ratings(bot1_id, bot2_id, outcome_i=0.0)
+            for _ in range(draws):
+                ranking.update_ratings(bot1_id, bot2_id, outcome_i=0.5)
+                
+            results.append({
+                "matchup": f"{bot1_id} vs {bot2_id}",
+                "bot1_wins": wins_1,
+                "bot2_wins": wins_2,
+                "draws": draws
+            })
+            
     ranking.save("backend/elo_ratings.json")
     
+    # Build final stats list
+    final_elos = { bid: round(ranking.get_rating(bid)) for bid in bot_ids }
+    
     return {
-        "bot1": req.bot1_id,
-        "bot2": req.bot2_id,
-        "wins_1": wins_1,
-        "wins_2": wins_2,
-        "draws": draws,
-        "new_elo_1": ranking.get_rating(req.bot1_id),
-        "new_elo_2": ranking.get_rating(req.bot2_id)
+        "status": "Tournament Complete",
+        "matches_played": len(results) * req.num_games,
+        "matchups": results,
+        "final_elos": final_elos
     }
