@@ -98,6 +98,9 @@ async function startGame() {
         currentHistoryIndex = 0;
         updateHistoryControls();
         
+        // Hide the color toggle once game starts
+        colorToggle.style.display = 'none';
+        
         // If player chose white, let AI move first
         if (!playerIsRed) {
             await fetchValidMoves(); // Even if it's the bot's turn, we can fetch
@@ -218,6 +221,13 @@ async function handleCellClick(r, c) {
     if ((pID === P1 && (pieceVal === P1 || pieceVal === P1_KING)) || 
         (pID === P2 && (pieceVal === P2 || pieceVal === P2_KING))) {
             
+        // Deselect if already selected
+        if (selectedPiece && selectedPiece.r === r && selectedPiece.c === c) {
+            selectedPiece = null;
+            renderBoard();
+            return;
+        }
+
         selectedPiece = { r, c };
         renderBoard();
         return;
@@ -328,9 +338,11 @@ function updateStatus() {
     if (gameState.winner === pID) {
         statusText.textContent = prefix + "You Win! 🎉";
         statusText.style.color = "#00f2fe";
+        colorToggle.style.display = 'inline'; // Show toggle again when game ends
     } else if (gameState.winner !== null && gameState.winner !== pID) {
         statusText.textContent = prefix + "Bot Wins! 🤖";
         statusText.style.color = "#ff3366";
+        colorToggle.style.display = 'inline'; // Show toggle again when game ends
     } else {
         const turnText = gameState.current_player === pID ? "Your Turn" : "Bot's Turn";
         statusText.textContent = prefix + turnText;
