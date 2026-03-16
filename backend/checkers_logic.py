@@ -18,6 +18,7 @@ class CheckersEnvironment:
         self.board = self._init_board()
         self.current_player = P1
         self.winner = None
+        self.move_count = 0
 
     def _init_board(self):
         board = [[EMPTY for _ in range(8)] for _ in range(8)]
@@ -36,13 +37,15 @@ class CheckersEnvironment:
         return {
             "board": copy.deepcopy(self.board),
             "current_player": self.current_player,
-            "winner": self.winner
+            "winner": self.winner,
+            "move_count": self.move_count
         }
 
     def set_state(self, state):
         self.board = copy.deepcopy(state["board"])
         self.current_player = state["current_player"]
         self.winner = state.get("winner")
+        self.move_count = state.get("move_count", 0)
 
     def is_king(self, piece):
         return piece in (P1_KING, P2_KING)
@@ -180,6 +183,7 @@ class CheckersEnvironment:
         if not self.get_valid_moves():
             self.winner = P2 if self.current_player == P1 else P1
             
+        self.move_count += 1
         return True
 
     def print_board(self):

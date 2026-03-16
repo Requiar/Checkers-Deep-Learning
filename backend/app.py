@@ -66,20 +66,21 @@ class GameState(BaseModel):
     board: List[List[int]]
     current_player: int
     winner: Optional[int] = None
+    move_count: int = 0
 
 class MoveRequest(BaseModel):
     state: GameState
     move: Dict[str, Any] # {"start": [r, c], "end": [r, c], "jumps": [...]}
 
-class BotMoveRequest(BaseModel):
+class ModelMoveRequest(BaseModel):
     state: GameState
     temperature: float = 0.5
-    bot_id: str = "bot_v1_baseline"
+    model_id: str = "bot_v1_baseline"
     search_depth: int = 50
 
 class WinProbRequest(BaseModel):
     state: GameState
-    bot_id: str = "bot_v1_baseline"
+    model_id: str = "bot_v1_baseline"
 
 class TournamentRequest(BaseModel):
     num_games: int = 2 # games per pairing
@@ -88,11 +89,12 @@ class TournamentRequest(BaseModel):
     max_moves: int = 150 # Prevent infinite loops
 
 class SimulateMatchRequest(BaseModel):
-    bot1_id: str
-    bot2_id: str
+    model1_id: str
+    model2_id: str
+    num_games: int = 10
+    max_moves: int = 100
     search_depth: int = 20
     temperature: float = 0.5
-    max_moves: int = 150
 
 @app.get("/api/health")
 def health_check():
@@ -170,8 +172,8 @@ def make_move(req: MoveRequest):
         
     return env.get_state()
 
-@app.post("/api/bot-move")
-def get_bot_move(req: BotMoveRequest):
+@app.post("/api/model-move")
+def get_model_move(req: ModelMoveRequest):
     state_dict = req.state.dict()
     
     if state_dict["winner"] is not None:
@@ -183,11 +185,11 @@ def get_bot_move(req: BotMoveRequest):
     if not valid_moves:
          raise HTTPException(status_code=400, detail="No valid moves available")
          
-    bot_id = req.bot_id
-    if bot_id not in mcts_agents:
-         raise HTTPException(status_code=404, detail="Bot ID not found")
+    model_id = req.model_id
+    if model_id not in mcts_agents:
+         raise HTTPException(status_code=404, detail="Model ID not found")
          
-    agent = mcts_agents[bot_id]
+    agent = mcts_agents[model_id]
     
     if agent == "RANDOM":
         import random
@@ -198,7 +200,7 @@ def get_bot_move(req: BotMoveRequest):
         move, pi = agent.get_action_prob(state_dict, temperature=req.temperature)
         
     if move is None:
-         raise HTTPException(status_code=500, detail="Bot failed to generate a move")
+         raise HTTPException(status_code=500, detail="Model failed to generate a move")
     
     env.make_move(move)
     
@@ -219,11 +221,11 @@ def get_win_probability(req: WinProbRequest):
     Evaluates the board using the requested bot's Value Head.
     Returns a probability between 0 and 1 of current_player winning.
     """
-    bot_id = req.bot_id
-    if bot_id == "bot_random" or bot_id not in models_db:
+    model_id = req.model_id
+    if model_id == "bot_random" or model_id not in models_db:
         return {"win_probability": 0.5} # Neutral fallback
         
-    model = models_db[bot_id]
+    model = models_db[model_id]
     state_dict = req.state.dict()
     
     board_tensor = encode_board(state_dict)
@@ -240,11 +242,11 @@ def get_win_probability(req: WinProbRequest):
 
 @app.post("/api/simulate-match")
 def simulate_match(req: SimulateMatchRequest):
-    if req.bot1_id not in mcts_agents or req.bot2_id not in mcts_agents:
-        raise HTTPException(status_code=404, detail="One or more Bot IDs not found")
+    if req.model1_id not in mcts_agents or req.model2_id not in mcts_agents:
+        raise HTTPException(status_code=404, detail="One or more Model IDs not found")
         
-    agent1 = mcts_agents[req.bot1_id]
-    agent2 = mcts_agents[req.bot2_id]
+    agent1 = mcts_agents[req.model1_id]
+    agent2 = mcts_agents[req.model2_id]
     
     env = CheckersEnvironment()
     move_count = 0
@@ -272,13 +274,13 @@ def simulate_match(req: SimulateMatchRequest):
     ranking.ratings = elo_ratings
     
     if env.winner == P1:
-         ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=1.0)
-         winner_id = req.bot1_id
+         ranking.update_ratings(req.model1_id, req.model2_id, outcome_i=1.0)
+         winner_id = req.model1_id
     elif env.winner == P2:
-         ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=0.0)
-         winner_id = req.bot2_id
+         ranking.update_ratings(req.model1_id, req.model2_id, outcome_i=0.0)
+         winner_id = req.model2_id
     else:
-         ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=0.5)
+         ranking.update_ratings(req.model1_id, req.model2_id, outcome_i=0.5)
          winner_id = "Draw"
          
     ranking.save("backend/elo_ratings.json")
@@ -286,8 +288,8 @@ def simulate_match(req: SimulateMatchRequest):
     return {
         "winner_id": winner_id,
         "moves": move_count,
-        "new_elo_1": ranking.get_rating(req.bot1_id),
-        "new_elo_2": ranking.get_rating(req.bot2_id)
+        "new_elo_1": ranking.get_rating(req.model1_id),
+        "new_elo_2": ranking.get_rating(req.model2_id)
     }
 
 @app.post("/api/tournament")
@@ -361,7 +363,7 @@ def run_tournament(req: TournamentRequest):
                 ranking.update_ratings(bot1_id, bot2_id, outcome_i=0.5)
                 
             results.append({
-                "matchup": f"{bot1_id} vs {bot2_id}",
+                "matchup": f"{bot_metadata[bot1_id]['name']} vs {bot_metadata[bot2_id]['name']}",
                 "bot1_wins": wins_1,
                 "bot2_wins": wins_2,
                 "draws": draws

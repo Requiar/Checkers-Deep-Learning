@@ -44,8 +44,17 @@ This document outlines the step-by-step plan to build a Checkers web application
 ## Phase 6: Testing & Optimization
 1. **Bot Validation**: Test the basic capabilities of the trained bot against simple rule-based heuristics or baseline random movers to verify learning progress.
 2. **Inference Optimization**: Ensure the tree minimax search does not block the API for too long. Apply caching mechanisms (like memoization of board value states) or Alpha-Beta pruning thresholds.
-3. **UI Polish**: Incorporate visual feedback—animations for piece captures, highlighting last moves, and indicating when the bot is "thinking".
 
 ## Phase 7: Deployment
 1. **Containerization**: Use Docker to containerize the frontend server and the Python backend/inference engine separately.
-2. **Hosting**: Deploy the app on a scalable platform (e.g., Render, Railway, or AWS) ensuring the backend server is configured with sufficient compute (or CPU instances optimized for PyTorch/TF inference).
+2. **Hosting**: Deploy the app on a scalable platform, ensuring the backend server is configured with sufficient compute.
+
+## Phase 8: Multi-Model Architecture & Tournaments
+1. **Diverse Model Training**: Train multiple AI models with different hyperparameters (Dropout, LR, Layers) to create distinct playing styles (e.g., V1 Baseline, V2 Deep, V3 Fast, V4 Dropout).
+2. **Tournament Simulation**: Implement backend logic (`/api/tournament`) to pit models against each other in batch MCTS simulations, updating their live Elo ratings based on win/loss/draw outcomes.
+3. **Dual Evaluation Bars**: Upgrade the UI to show live, simultaneous "Win Probability" evaluations from both models when they play against each other, simulating a dual-engine analysis. 
+
+## Phase 9: Premium "Noir" UI Refinement
+1. **Aesthetic Overhaul**: Refine the frontend into a premium, sophisticated dark theme.
+2. **Color Palette**: Utilize deep charcoal/brown gradients, glassmorphism panels, and elegant gold accents.
+3. **Terminology**: Upgrade the professional feel of the application by transitioning nomenclature from "Bots" to "Models" and "Engines".

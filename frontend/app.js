@@ -8,7 +8,7 @@ let validDestinationsMap = {};
 let stateHistory = [];
 let currentHistoryIndex = -1;
 
-let availableBots = [];
+let availableModels = [];
 let activeMatch = false;
 
 const boardElement = document.getElementById('checkers-board');
@@ -27,8 +27,26 @@ const loadingOverlay = document.getElementById('loading-overlay');
 const btnPrev = document.getElementById('btn-prev');
 const btnNext = document.getElementById('btn-next');
 const btnCurrent = document.getElementById('btn-current');
-const probBarFill = document.getElementById('prob-bar-fill');
-const probText = document.getElementById('prob-text');
+const p1ProbContainer = document.getElementById('p1-prob-container');
+const p1ProbText = document.getElementById('p1-prob-text');
+const p1ProbFill = document.getElementById('p1-prob-bar-fill');
+const p1ProbLabel = document.getElementById('p1-prob-label');
+
+const p2ProbContainer = document.getElementById('p2-prob-container');
+const p2ProbText = document.getElementById('p2-prob-text');
+const p2ProbFill = document.getElementById('p2-prob-bar-fill');
+const p2ProbLabel = document.getElementById('p2-prob-label');
+const moveLimitSlider = document.getElementById('move-limit-slider');
+const moveLimitValue = document.getElementById('move-limit-value');
+const moveCounterDisplay = document.getElementById('move-counter-display');
+const p1InfoBtn = document.getElementById('p1-info-btn');
+const p2InfoBtn = document.getElementById('p2-info-btn');
+
+// Details Modal Elements
+const detailsModal = document.getElementById('details-modal');
+const detailsTitle = document.getElementById('details-title');
+const detailsBody = document.getElementById('details-body');
+const detailsCloseBtn = document.getElementById('details-close-btn');
 
 // Tourney Modal Elements
 const tourneyModal = document.getElementById('tourney-modal');
@@ -49,7 +67,7 @@ const tStandingsBody = document.getElementById('t-standings-body');
 
 let tourneyActive = false;
 let tourneyStopped = false;
-let botRecords = {}; // { bot_id: { w:0, l:0, d:0, elo:1000 } }
+let modelRecords = {}; // { model_id: { w:0, l:0, d:0, elo:1000 } }
 
 // Board Represents
 const EMPTY = 0;
@@ -63,41 +81,123 @@ async function initializeApp() {
     try {
         const response = await fetch(`${API_URL}/bots`);
         const data = await response.json();
-        availableBots = data.bots;
+        availableModels = data.bots;
         
-        let botOptionsHTML = '';
-        availableBots.forEach(bot => {
-            botOptionsHTML += `<option value="${bot.id}">${bot.name} (Elo: ${Math.round(bot.elo)})</option>`;
+        let modelOptionsHTML = '';
+        availableModels.forEach(model => {
+            modelOptionsHTML += `<option value="${model.id}">${model.name} (Elo: ${Math.round(model.elo)})</option>`;
         });
         
-        p1Select.innerHTML = `<option value="human">Human</option>` + botOptionsHTML;
-        p2Select.innerHTML = `<option value="human">Human</option>` + botOptionsHTML;
+        p1Select.innerHTML = `<option value="human">Human</option>` + modelOptionsHTML;
+        p2Select.innerHTML = `<option value="human">Human</option>` + modelOptionsHTML;
         
-        // Default P2 to the baseline bot if it exists
-        if(availableBots.length > 0) p2Select.value = availableBots[0].id;
+        // Default P2 to the baseline model if it exists
+        if(availableModels.length > 0) p2Select.value = availableModels[0].id;
+        
+        // Initialize with starting board visual
+        gameState = getInitialState();
+        stateHistory = [JSON.parse(JSON.stringify(gameState))];
+        currentHistoryIndex = 0;
+        
+        renderBoard();
+        updateStatus();
+        updateWinProbability();
         
         initTourneyRecords();
         renderStandings();
+        updateInfoButtons();
         
     } catch (err) {
         console.error("Failed to load bots:", err);
     }
 }
+
+function updateInfoButtons() {
+    p1InfoBtn.style.display = p1Select.value === "human" ? "none" : "block";
+    p2InfoBtn.style.display = p2Select.value === "human" ? "none" : "block";
+}
+
+p1Select.addEventListener('change', updateInfoButtons);
+p2Select.addEventListener('change', updateInfoButtons);
+
+p1InfoBtn.addEventListener('click', () => showModelDetails(p1Select.value));
+p2InfoBtn.addEventListener('click', () => showModelDetails(p2Select.value));
+detailsCloseBtn.addEventListener('click', () => detailsModal.classList.add('hidden'));
+
+function showModelDetails(modelId) {
+    const model = availableModels.find(m => m.id === modelId);
+    if (!bot) return;
+
+    detailsTitle.textContent = bot.name;
+    
+    let html = `
+        <div class="details-section-title">Neural Architecture</div>
+        <table class="details-table">
+            <tr><th>Hidden Layers</th><td>${bot.config.layers}</td></tr>
+            <tr><th>Channels per Layer</th><td>${bot.config.channels}</td></tr>
+            <tr><th>Dropout Rate</th><td>${bot.config.dropout}</td></tr>
+        </table>
+
+        <div class="details-section-title">Training Hyperparameters</div>
+        <table class="details-table">
+            <tr><th>Learning Rate</th><td>${bot.config.lr}</td></tr>
+            <tr><th>Discount Factor (γ)</th><td>${bot.config.discount}</td></tr>
+            <tr><th>Epochs</th><td>${bot.config.epochs}</td></tr>
+        </table>
+        
+        <div class="details-section-title">Dataset & Generation</div>
+        <table class="details-table">
+            <tr><th>Training Samples</th><td>${bot.training_samples.toLocaleString()}</td></tr>
+            <tr><th>Self-Play Games</th><td>${bot.config.num_games}</td></tr>
+            <tr><th>MCTS Sim Depth</th><td>${bot.config.gen_depth}</td></tr>
+        </table>
+
+        <div class="details-section-title">Performance Metrics</div>
+        <table class="details-table">
+            <tr><th>Final Training Loss</th><td>${bot.final_train_loss.toFixed(6)}</td></tr>
+            <tr><th>Final Validation Loss</th><td>${bot.final_val_loss.toFixed(6)}</td></tr>
+        </table>
+    `;
+    
+    detailsBody.innerHTML = html;
+    detailsModal.classList.remove('hidden');
+}
+
 window.addEventListener('DOMContentLoaded', initializeApp);
 
+function getInitialState() {
+    const board = Array(8).fill(null).map(() => Array(8).fill(EMPTY));
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 8; c++) {
+            if ((r + c) % 2 === 1) board[r][c] = P2;
+        }
+    }
+    for (let r = 5; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if ((r + c) % 2 === 1) board[r][c] = P1;
+        }
+    }
+    return {
+        board: board,
+        current_player: P1,
+        winner: null,
+        move_count: 0
+    };
+}
+
 function initTourneyRecords() {
-    availableBots.forEach(b => {
-        if (!botRecords[b.id]) {
-            botRecords[b.id] = { name: b.name, w: 0, l: 0, d: 0, elo: Math.round(b.elo) };
+    availableModels.forEach(m => {
+        if (!modelRecords[m.id]) {
+            modelRecords[m.id] = { name: m.name, w: 0, l: 0, d: 0, elo: Math.round(m.elo) };
         } else {
-            botRecords[b.id].elo = Math.round(b.elo);
+            modelRecords[m.id].elo = Math.round(m.elo);
         }
     });
 }
 
 function renderStandings() {
     // Sort by Elo descending
-    const sorted = Object.entries(botRecords).sort((a, b) => b[1].elo - a[1].elo);
+    const sorted = Object.entries(modelRecords).sort((a, b) => b[1].elo - a[1].elo);
     tStandingsBody.innerHTML = '';
     
     sorted.forEach(([id, data], index) => {
@@ -106,7 +206,7 @@ function renderStandings() {
             <td>#${index + 1}</td>
             <td style="color: var(--primary-color);">${data.name}</td>
             <td style="font-weight: bold;">${data.elo}</td>
-            <td><span style="color:#00f2fe">${data.w}</span> - <span style="color:#ff3366">${data.l}</span> - <span style="color:#a0a0a0">${data.d}</span></td>
+            <td><span style="color:#2c3e50">${data.w}</span> - <span style="color:#5a5a5a">${data.l}</span> - <span style="color:#a0a0a0">${data.d}</span></td>
         `;
         tStandingsBody.appendChild(tr);
     });
@@ -158,8 +258,18 @@ if (btnCurrent) {
 }
 
 tempSlider.addEventListener('input', (e) => tempValue.textContent = e.target.value);
-depthSlider.addEventListener('input', (e) => depthValue.textContent = e.target.value);
+if (depthSlider) {
+    depthSlider.addEventListener('input', () => {
+        depthValue.innerText = depthSlider.value;
+    });
+}
 
+if (moveLimitSlider) {
+    moveLimitSlider.addEventListener('input', () => {
+        moveLimitValue.innerText = moveLimitSlider.value;
+        if (gameState) updateStatus();
+    });
+}
 tGamesInput.addEventListener('input', (e) => tGamesVal.textContent = e.target.value);
 tMovesInput.addEventListener('input', (e) => tMovesVal.textContent = e.target.value);
 tDepthInput.addEventListener('input', (e) => tDepthVal.textContent = e.target.value);
@@ -178,7 +288,7 @@ tResetBtn.addEventListener('click', async () => {
     try {
         await fetch(`${API_URL}/reset-elos`, { method: 'POST' });
         tProgressLog.textContent = "Elo Rankings have been factory reset.";
-        botRecords = {}; // Force wipe
+        modelRecords = {}; // Force wipe
         await initializeApp();
     } catch (e) {
         console.error(e);
@@ -197,18 +307,38 @@ btnStart.addEventListener('click', startGame);
 async function updateWinProbability() {
     if (!gameState) return;
     
-    // Choose which bot evaluates the board. Default to whoever is P2, else P1.
-    let evaluatorId = p2Select.value !== "human" ? p2Select.value : (p1Select.value !== "human" ? p1Select.value : null);
+    const p1BotId = p1Select.value !== "human" ? p1Select.value : null;
+    const p2BotId = p2Select.value !== "human" ? p2Select.value : null;
     
-    if(!evaluatorId) {
-        // If human vs human, we can't really evaluate easily without picking a random bot.
-        // Let's just pick the first available bot if it exists
-        if (availableBots.length > 0) evaluatorId = availableBots[0].id;
-        else return;
+    // If both human, display evaluation from first model but only one bar
+    if (!p1BotId && !p2BotId) {
+        if (availableModels.length > 0) {
+            await fetchEval(availableModels[0].id, p2ProbContainer, p2ProbText, p2ProbFill, p2ProbLabel, "Engine Opinion");
+            p1ProbContainer.classList.add('hidden');
+        }
+        return;
     }
-    
+
+    if (p1BotId) {
+        p1ProbContainer.classList.remove('hidden');
+        const modelName = availableModels.find(m => m.id === p1BotId)?.name || "P1 Model";
+        await fetchEval(p1BotId, p1ProbContainer, p1ProbText, p1ProbFill, p1ProbLabel, `${modelName}'s View`);
+    } else {
+        p1ProbContainer.classList.add('hidden');
+    }
+
+    if (p2BotId) {
+        p2ProbContainer.classList.remove('hidden');
+        const modelName = availableModels.find(m => m.id === p2BotId)?.name || "P2 Model";
+        await fetchEval(p2BotId, p2ProbContainer, p2ProbText, p2ProbFill, p2ProbLabel, `${modelName}'s View`);
+    } else {
+        p2ProbContainer.classList.add('hidden');
+    }
+}
+
+async function fetchEval(botId, container, textEl, fillEl, labelEl, labelText) {
     try {
-        const payload = { state: gameState, bot_id: evaluatorId };
+        const payload = { state: gameState, model_id: botId };
         const response = await fetch(`${API_URL}/win-probability`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -216,7 +346,9 @@ async function updateWinProbability() {
         });
         
         const data = await response.json();
-        // The endpoint returns win_probability from the perspective of the CURRENT player.
+        labelEl.textContent = labelText;
+        
+        // The endpoint returns win_probability from perspective of CURRENT player.
         // We want to map this purely to Red (P1) vs White (P2).
         let redAdvantage = data.win_probability;
         if (gameState.current_player === P2) {
@@ -226,16 +358,16 @@ async function updateWinProbability() {
         const redPct = Math.round(redAdvantage * 100);
         const whitePct = 100 - redPct;
         
-        probText.textContent = `${redPct}% / ${whitePct}%`;
-        probBarFill.style.width = `${redPct}%`;
+        textEl.textContent = `${redPct}% / ${whitePct}%`;
+        fillEl.style.width = `${redPct}%`;
         
     } catch (err) {
-        console.error("Failed to fetch win probability", err);
+        console.error(`Failed to fetch win probability for ${botId}`, err);
     }
 }
 
 async function startLiveTournament() {
-    if (availableBots.length < 2) {
+    if (availableModels.length < 2) {
         alert("Not enough bots to run a tournament.");
         return;
     }
@@ -243,7 +375,7 @@ async function startLiveTournament() {
     tourneyActive = true;
     tourneyStopped = false;
     tStartBtn.textContent = "Stop";
-    tStartBtn.style.background = "#ff3366";
+    tStartBtn.style.background = "#333333";
     tResetBtn.disabled = true;
     tCloseBtn.disabled = true;
     tStatus.textContent = "RUNNING";
@@ -256,12 +388,12 @@ async function startLiveTournament() {
     
     // Generate schedule
     let schedule = [];
-    for (let i = 0; i < availableBots.length; i++) {
-        for (let j = i + 1; j < availableBots.length; j++) {
+    for (let i = 0; i < availableModels.length; i++) {
+        for (let j = i + 1; j < availableModels.length; j++) {
             for (let g = 0; g < gamesPerPair; g++) {
                 // Alternate red/white
-                if (g % 2 === 0) schedule.push([availableBots[i].id, availableBots[j].id]);
-                else schedule.push([availableBots[j].id, availableBots[i].id]);
+                if (g % 2 === 0) schedule.push([availableModels[i].id, availableModels[j].id]);
+                else schedule.push([availableModels[j].id, availableModels[i].id]);
             }
         }
     }
@@ -272,14 +404,14 @@ async function startLiveTournament() {
     for (const [bot1, bot2] of schedule) {
         if (tourneyStopped) break;
         gamesPlayed++;
-        const n1 = botRecords[bot1].name;
-        const n2 = botRecords[bot2].name;
+        const n1 = modelRecords[bot1].name;
+        const n2 = modelRecords[bot2].name;
         
         tProgressLog.innerHTML = `Match <span style="color:#00f2fe">${gamesPlayed}</span> of ${totalGames}<br><strong>${n1}</strong> vs <strong>${n2}</strong>...`;
         
         const payload = {
-            bot1_id: bot1,
-            bot2_id: bot2,
+            model1_id: bot1,
+            model2_id: bot2,
             search_depth: depth,
             temperature: temp,
             max_moves: maxMoves
@@ -295,19 +427,19 @@ async function startLiveTournament() {
             
             // Record outcomes locally
             if (data.winner_id === bot1) {
-                botRecords[bot1].w += 1;
-                botRecords[bot2].l += 1;
+                modelRecords[bot1].w += 1;
+                modelRecords[bot2].l += 1;
             } else if (data.winner_id === bot2) {
-                botRecords[bot2].w += 1;
-                botRecords[bot1].l += 1;
+                modelRecords[bot2].w += 1;
+                modelRecords[bot1].l += 1;
             } else {
-                botRecords[bot1].d += 1;
-                botRecords[bot2].d += 1;
+                modelRecords[bot1].d += 1;
+                modelRecords[bot2].d += 1;
             }
             
             // Update live elos
-            botRecords[bot1].elo = Math.round(data.new_elo_1);
-            botRecords[bot2].elo = Math.round(data.new_elo_2);
+            modelRecords[bot1].elo = Math.round(data.new_elo_1);
+            modelRecords[bot2].elo = Math.round(data.new_elo_2);
             
             renderStandings();
             
@@ -369,12 +501,18 @@ async function checkAndExecuteTurn() {
     renderBoard();
     updateStatus();
 
+    if (gameState.winner !== null) {
+        p1Select.disabled = false;
+        p2Select.disabled = false;
+        return;
+    }
+
     const isP1Turn = gameState.current_player === P1;
     const currentConfig = isP1Turn ? p1Select.value : p2Select.value;
     
     if (currentConfig !== "human") {
-        // It's a bot's turn
-        requestBotMove(currentConfig);
+        // It's a model's turn
+        requestModelMove(currentConfig);
     }
 }
 
@@ -541,9 +679,9 @@ async function attemptMove(moveObj) {
     }
 }
 
-async function requestBotMove(botId) {
+async function requestModelMove(modelId) {
     loadingOverlay.classList.remove('hidden');
-    statusText.textContent = "Bot is thinking...";
+    statusText.textContent = "Model is thinking...";
     
     const temperature = parseFloat(tempSlider.value);
     const searchDepth = parseInt(depthSlider.value);
@@ -552,16 +690,16 @@ async function requestBotMove(botId) {
         const payload = { 
             state: gameState, 
             temperature: temperature,
-            bot_id: botId,
+            model_id: modelId,
             search_depth: searchDepth
         };
-        const response = await fetch(`${API_URL}/bot-move`, {
+        const response = await fetch(`${API_URL}/model-move`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        if (!response.ok) throw new Error("Bot move failed");
+        if (!response.ok) throw new Error("Model move failed");
 
         const data = await response.json();
         gameState = data.new_state;
@@ -577,24 +715,42 @@ async function requestBotMove(botId) {
         }, 500);
 
     } catch (err) {
-        console.error("Bot AI error", err);
+        console.error("Model AI error", err);
         loadingOverlay.classList.add('hidden');
-        statusText.textContent = "Bot Error";
+        statusText.textContent = "Model Error";
+        // Re-enable UI
+        p1Select.disabled = false;
+        p2Select.disabled = false;
+        activeMatch = false; 
     }
 }
 
 function updateStatus() {
     let prefix = currentHistoryIndex !== stateHistory.length - 1 ? "[REVIEW] " : "";
     
-    if (gameState.winner === P1) {
-        statusText.textContent = prefix + "Red Wins! 🎉";
-        statusText.style.color = "#ff3366";
-    } else if (gameState.winner === P2) {
-        statusText.textContent = prefix + "White Wins! 🤖";
-        statusText.style.color = "#e0e0e0";
-    } else {
-        const turnText = gameState.current_player === P1 ? "Red's Turn" : "White's Turn";
-        statusText.textContent = prefix + turnText;
+    if (gameState.winner !== null) {
+        if (gameState.winner === P1) {
+            statusText.innerText = prefix + "Game Over - Black Wins! 🏆";
+            statusText.style.color = "var(--text-primary)";
+        } else if (gameState.winner === P2) {
+            statusText.innerText = prefix + "Game Over - White Wins! 🤖";
+            statusText.style.color = "var(--text-primary)";
+        } else if (gameState.winner === 0) {
+            statusText.innerText = prefix + "Game Over - Draw (Move Limit)";
+            statusText.style.color = "var(--text-secondary)";
+        }
+    } else if (gameState.move_count >= parseInt(moveLimitSlider.value)) {
+        gameState.winner = 0; 
+        statusText.innerText = prefix + "Game Over - Draw (Move Limit)";
         statusText.style.color = "var(--text-secondary)";
+    } else {
+        const turn = gameState.current_player === P1 ? "Black" : "White";
+        const msg = activeMatch ? `${turn}'s Turn` : "Ready to Play";
+        statusText.innerText = prefix + msg;
+        statusText.style.color = "var(--text-secondary)";
+    }
+    
+    if (moveCounterDisplay) {
+        moveCounterDisplay.innerText = `Moves: ${gameState.move_count || 0}/${moveLimitSlider.value}`;
     }
 }

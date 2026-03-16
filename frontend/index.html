@@ -13,7 +13,7 @@
   <div class="app-container">
     <header>
       <h1>Checkers <span>Deep Learning Engine</span></h1>
-      <p class="subtitle">Play against a neural network bot trained via Monte Carlo Tree Search</p>
+      <p class="subtitle">Play against a neural network model trained via Monte Carlo Tree Search</p>
     </header>
 
     <main class="game-area">
@@ -24,14 +24,23 @@
         </div>
         
         <!-- Win Probability Bar -->
-        <div class="prob-container glassmorphism" style="padding: 1rem; border-radius: 12px; min-width: unset;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">
-            <span style="color: var(--primary-color);">Red Advantage</span>
-            <span style="color: var(--text-secondary);" id="prob-text">50% / 50%</span>
-            <span style="color: #e0e0e0;">White Advantage</span>
+        <div id="p1-prob-container" class="prob-container glassmorphism hidden" style="padding: 0.8rem; border-radius: 12px; min-width: unset; margin-bottom: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem; font-size: 0.75rem; font-weight: 600;">
+            <span style="color: #666666;" id="p1-prob-label">P1 Model</span>
+            <span style="color: var(--text-secondary);" id="p1-prob-text">50% / 50%</span>
           </div>
-          <div class="prob-bar-bg" style="width: 100%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; position: relative;">
-            <div id="prob-bar-fill" style="width: 50%; height: 100%; background: linear-gradient(90deg, var(--primary-color), #ff6b8b); transition: width 0.5s ease;"></div>
+          <div class="prob-bar-bg" style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; position: relative;">
+            <div id="p1-prob-bar-fill" style="width: 50%; height: 100%; background: linear-gradient(90deg, #333333, #000000); transition: width 0.5s ease;"></div>
+          </div>
+        </div>
+
+        <div id="p2-prob-container" class="prob-container glassmorphism" style="padding: 0.8rem; border-radius: 12px; min-width: unset;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem; font-size: 0.75rem; font-weight: 600;">
+            <span style="color: #e0e0e0;" id="p2-prob-label">P2 Model</span>
+            <span style="color: var(--text-secondary);" id="p2-prob-text">50% / 50%</span>
+          </div>
+          <div class="prob-bar-bg" style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; position: relative;">
+            <div id="p2-prob-bar-fill" style="width: 50%; height: 100%; background: linear-gradient(90deg, #f5e6d3, #b8a088); transition: width 0.5s ease;"></div>
           </div>
         </div>
       </div>
@@ -45,16 +54,22 @@
         <div class="controls">
           <div class="player-config" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
             <div style="flex: 1;">
-              <label style="font-size: 0.8rem; display: block; margin-bottom: 0.3rem;">Red Player (P1)</label>
-              <select id="p1-select" class="dropdown">
-                <option value="human">Human</option>
-              </select>
+              <label style="font-size: 0.8rem; display: block; margin-bottom: 0.3rem;">Black Player (P1)</label>
+              <div class="select-container">
+                <select id="p1-select" class="dropdown">
+                  <option value="human">Human</option>
+                </select>
+                <button id="p1-info-btn" class="info-icon" title="View Model Details" style="display:none;">i</button>
+              </div>
             </div>
             <div style="flex: 1;">
               <label style="font-size: 0.8rem; display: block; margin-bottom: 0.3rem;">White Player (P2)</label>
-              <select id="p2-select" class="dropdown">
-                <option value="bot_v1_baseline">Bot V1 Baseline (Loading...)</option>
-              </select>
+              <div class="select-container">
+                <select id="p2-select" class="dropdown">
+                  <option value="bot_v1_baseline">V1 Baseline (Loading...)</option>
+                </select>
+                <button id="p2-info-btn" class="info-icon" title="View Model Details" style="display:none;">i</button>
+              </div>
             </div>
           </div>
           
@@ -65,7 +80,7 @@
           
           <div class="slider-group">
             <div class="slider-header">
-              <label for="temperature-slider">Bot Temperature (τ)</label>
+              <label for="temperature-slider">Model Temperature (τ)</label>
               <span id="temp-value" class="badge">0.5</span>
             </div>
             <input type="range" id="temperature-slider" min="0" max="2" step="0.1" value="0.5">
@@ -80,9 +95,18 @@
             <input type="range" id="depth-slider" min="10" max="500" step="10" value="50">
           </div>
           
+          <div class="slider-group" style="padding-top: 0.5rem; border-top: none;">
+            <div class="slider-header">
+              <label for="move-limit-slider">Max Moves (Interactive)</label>
+              <span id="move-limit-value" class="badge">100</span>
+            </div>
+            <input type="range" id="move-limit-slider" min="20" max="500" step="10" value="100">
+            <p id="move-counter-display" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; font-weight: 600;">Moves: 0/100</p>
+          </div>
+          
           <div class="legend" style="align-items: center; justify-content: space-between;">
             <div style="display: flex; gap: 1.5rem;">
-                <div class="legend-item"><div class="piece p1"></div><span id="legend-p1-text">Red</span></div>
+                <div class="legend-item"><div class="piece p1"></div><span id="legend-p1-text">Black</span></div>
                 <div class="legend-item"><div class="piece p2"></div><span id="legend-p2-text">White</span></div>
             </div>
           </div>
@@ -100,7 +124,7 @@
         <div id="loading-overlay" class="overlay hidden">
     <div class="loader">
       <div class="spinner"></div>
-      <p style="margin-top: 1rem; color: #fff;">Bot is thinking...</p>
+      <p style="margin-top: 1rem; color: #fff;">Model is thinking...</p>
     </div>
   </div>
       </aside>
@@ -108,22 +132,23 @@
   </div>
   
   <!-- Tournament Modal -->
-  <div id="tourney-modal" class="overlay hidden">
-    <div class="modal-content glassmorphism" style="width: 800px; max-width: 95vw; padding: 2rem; color: #fff; display: flex; flex-direction: column; gap: 1.5rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem;">
-        <h2>Live Round-Robin Tournament</h2>
-        <button id="t-close-btn" class="btn" style="padding: 5px 10px; background: transparent; border: 1px solid var(--glass-border);">&times;</button>
+  <div id="tourney-modal" class="modal-overlay hidden">
+    <div class="modal-content tourney-modal-content glassmorphism">
+      <div class="modal-header">
+        <h2>AI Model Tournament Panel</h2>
+        <button id="t-close-btn" class="close-btn">&times;</button>
       </div>
       
-      <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-        <!-- Config Section -->
-        <div class="tourney-config" style="flex: 1; min-width: 250px;">
-          <h3 style="margin-bottom: 1rem; color: var(--primary-color);">Configuration</h3>
-          
-          <div class="slider-group">
-            <div class="slider-header"><label>Games per Matchup</label><span class="badge" id="t-games-val">2</span></div>
-            <input type="range" id="t-games" min="1" max="10" step="1" value="2">
-          </div>
+      <div class="modal-body">
+        <div class="tourney-layout">
+          <!-- Config Panel -->
+          <div class="tourney-config-panel">
+            <h3 style="margin-bottom: 1rem; font-size: 0.9rem; text-transform: uppercase; color: var(--text-secondary);">Tournament Settings</h3>
+            
+            <div class="slider-group" style="border-top: none; padding-top: 0;">
+              <div class="slider-header"><label>Games/Match</label><span class="badge" id="t-games-val">20</span></div>
+              <input type="range" id="t-games" min="2" max="50" step="2" value="20">
+            </div>
           
           <div class="slider-group">
             <div class="slider-header"><label>Max Moves/Game</label><span class="badge" id="t-moves-val">100</span></div>
@@ -142,31 +167,49 @@
           
           <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
             <button id="t-start-btn" class="btn primary" style="flex: 2;">Start Stream</button>
-            <button id="t-reset-btn" class="btn" style="flex: 1; background: #ff3366; color: white;">Reset Elos</button>
+            <button id="t-reset-btn" class="btn" style="flex: 1; background: #333; color: white;">Reset Elos</button>
           </div>
-        </div>
-        
-        <!-- Live Section -->
-        <div class="tourney-live" style="flex: 1.5; min-width: 300px; display: flex; flex-direction: column;">
-          <h3 style="margin-bottom: 0.5rem; color: var(--primary-color);">Live Standings <span id="t-status" style="font-size: 0.8rem; font-weight: normal; color: #a0a0a0; margin-left: 10px;">IDLE</span></h3>
-          <p id="t-progress-log" style="font-size: 0.9rem; margin-bottom: 1rem; min-height: 1.5rem; color: #e0e0e0;">Select config and click Start.</p>
+          </div>
           
-          <div style="flex-grow: 1; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--glass-border); padding: 1rem; overflow-y: auto; max-height: 300px;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left;">
-              <thead>
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                  <th style="padding-bottom: 8px;">Rank</th>
-                  <th style="padding-bottom: 8px;">Bot ID</th>
-                  <th style="padding-bottom: 8px;">Elo</th>
-                  <th style="padding-bottom: 8px;">W-L-D</th>
-                </tr>
-              </thead>
-              <tbody id="t-standings-body">
-                <!-- Javascript Injection -->
-              </tbody>
-            </table>
+          <!-- Live Section -->
+          <div class="tourney-live-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+               <h3 style="color: var(--secondary-color); margin: 0;">Live Standings</h3>
+               <span id="t-status" class="t-status-badge">IDLE</span>
+            </div>
+            
+            <p id="t-progress-log" class="t-log">Select config and click Start.</p>
+          
+            <div style="flex-grow: 1; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--glass-border); padding: 1rem; overflow-y: auto; max-height: 300px;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <th style="padding-bottom: 8px;">Rank</th>
+                    <th style="padding-bottom: 8px;">Model</th>
+                    <th style="padding-bottom: 8px;">Elo</th>
+                    <th style="padding-bottom: 8px;">W-L-D</th>
+                  </tr>
+                </thead>
+                <tbody id="t-standings-body">
+                  <!-- Javascript Injection -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Details Modal -->
+  <div id="details-modal" class="modal-overlay hidden">
+    <div class="modal-content glassmorphism" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 id="details-title">Model Details</h2>
+        <button id="details-close-btn" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body" id="details-body">
+        <!-- Content injected by JS -->
       </div>
     </div>
   </div>
