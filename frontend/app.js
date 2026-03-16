@@ -30,6 +30,26 @@ const btnCurrent = document.getElementById('btn-current');
 const probBarFill = document.getElementById('prob-bar-fill');
 const probText = document.getElementById('prob-text');
 
+// Tourney Modal Elements
+const tourneyModal = document.getElementById('tourney-modal');
+const tCloseBtn = document.getElementById('t-close-btn');
+const tGamesInput = document.getElementById('t-games');
+const tMovesInput = document.getElementById('t-moves');
+const tDepthInput = document.getElementById('t-depth');
+const tTempInput = document.getElementById('t-temp');
+const tGamesVal = document.getElementById('t-games-val');
+const tMovesVal = document.getElementById('t-moves-val');
+const tDepthVal = document.getElementById('t-depth-val');
+const tTempVal = document.getElementById('t-temp-val');
+const tStartBtn = document.getElementById('t-start-btn');
+const tResetBtn = document.getElementById('t-reset-btn');
+const tStatus = document.getElementById('t-status');
+const tProgressLog = document.getElementById('t-progress-log');
+const tStandingsBody = document.getElementById('t-standings-body');
+
+let tourneyActive = false;
+let botRecords = {}; // { bot_id: { w:0, l:0, d:0, elo:1000 } }
+
 // Board Represents
 const EMPTY = 0;
 const P1 = 1;      // Red
@@ -55,11 +75,41 @@ async function initializeApp() {
         // Default P2 to the baseline bot if it exists
         if(availableBots.length > 0) p2Select.value = availableBots[0].id;
         
+        initTourneyRecords();
+        renderStandings();
+        
     } catch (err) {
         console.error("Failed to load bots:", err);
     }
 }
 window.addEventListener('DOMContentLoaded', initializeApp);
+
+function initTourneyRecords() {
+    availableBots.forEach(b => {
+        if (!botRecords[b.id]) {
+            botRecords[b.id] = { name: b.name, w: 0, l: 0, d: 0, elo: Math.round(b.elo) };
+        } else {
+            botRecords[b.id].elo = Math.round(b.elo);
+        }
+    });
+}
+
+function renderStandings() {
+    // Sort by Elo descending
+    const sorted = Object.entries(botRecords).sort((a, b) => b[1].elo - a[1].elo);
+    tStandingsBody.innerHTML = '';
+    
+    sorted.forEach(([id, data], index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>#${index + 1}</td>
+            <td style="color: var(--primary-color);">${data.name}</td>
+            <td style="font-weight: bold;">${data.elo}</td>
+            <td><span style="color:#00f2fe">${data.w}</span> - <span style="color:#ff3366">${data.l}</span> - <span style="color:#a0a0a0">${data.d}</span></td>
+        `;
+        tStandingsBody.appendChild(tr);
+    });
+}
 
 function updateHistoryControls() {
     if (btnPrev && btnNext && btnCurrent) {
@@ -109,7 +159,32 @@ if (btnCurrent) {
 tempSlider.addEventListener('input', (e) => tempValue.textContent = e.target.value);
 depthSlider.addEventListener('input', (e) => depthValue.textContent = e.target.value);
 
-btnTourney.addEventListener('click', runTournament);
+tGamesInput.addEventListener('input', (e) => tGamesVal.textContent = e.target.value);
+tMovesInput.addEventListener('input', (e) => tMovesVal.textContent = e.target.value);
+tDepthInput.addEventListener('input', (e) => tDepthVal.textContent = e.target.value);
+tTempInput.addEventListener('input', (e) => tTempVal.textContent = e.target.value);
+
+btnTourney.addEventListener('click', () => {
+    tourneyModal.classList.remove('hidden');
+});
+
+tCloseBtn.addEventListener('click', () => {
+    if(!tourneyActive) tourneyModal.classList.add('hidden');
+});
+
+tResetBtn.addEventListener('click', async () => {
+    if(tourneyActive) return;
+    try {
+        await fetch(`${API_URL}/reset-elos`, { method: 'POST' });
+        tProgressLog.textContent = "Elo Rankings have been factory reset.";
+        botRecords = {}; // Force wipe
+        await initializeApp();
+    } catch (e) {
+        console.error(e);
+    }
+});
+
+tStartBtn.addEventListener('click', startLiveTournament);
 btnStart.addEventListener('click', startGame);
 
 async function updateWinProbability() {
@@ -152,52 +227,98 @@ async function updateWinProbability() {
     }
 }
 
-async function runTournament() {
-    activeMatch = false;
-    loadingOverlay.classList.remove('hidden');
+async function startLiveTournament() {
+    if (availableBots.length < 2) {
+        alert("Not enough bots to run a tournament.");
+        return;
+    }
     
-    const numGames = prompt("How many games should EACH PAIR of bots play against each other?", "2");
-    if(!numGames) { loadingOverlay.classList.add('hidden'); return; }
+    tourneyActive = true;
+    tStartBtn.disabled = true;
+    tResetBtn.disabled = true;
+    tCloseBtn.disabled = true;
+    tStatus.textContent = "RUNNING";
+    tStatus.style.color = "#00f2fe";
     
-    document.querySelector('#loading-overlay p').textContent = `Running ${numGames} games per pair in the cloud...`;
+    const gamesPerPair = parseInt(tGamesInput.value);
+    const maxMoves = parseInt(tMovesInput.value);
+    const depth = parseInt(tDepthInput.value);
+    const temp = parseFloat(tTempInput.value);
     
-    try {
+    // Generate schedule
+    let schedule = [];
+    for (let i = 0; i < availableBots.length; i++) {
+        for (let j = i + 1; j < availableBots.length; j++) {
+            for (let g = 0; g < gamesPerPair; g++) {
+                // Alternate red/white
+                if (g % 2 === 0) schedule.push([availableBots[i].id, availableBots[j].id]);
+                else schedule.push([availableBots[j].id, availableBots[i].id]);
+            }
+        }
+    }
+    
+    const totalGames = schedule.length;
+    let gamesPlayed = 0;
+    
+    for (const [bot1, bot2] of schedule) {
+        gamesPlayed++;
+        const n1 = botRecords[bot1].name;
+        const n2 = botRecords[bot2].name;
+        
+        tProgressLog.innerHTML = `Match <span style="color:#00f2fe">${gamesPlayed}</span> of ${totalGames}<br><strong>${n1}</strong> vs <strong>${n2}</strong>...`;
+        
         const payload = {
-            num_games: parseInt(numGames),
-            search_depth: parseInt(depthSlider.value),
-            temperature: parseFloat(tempSlider.value)
+            bot1_id: bot1,
+            bot2_id: bot2,
+            search_depth: depth,
+            temperature: temp,
+            max_moves: maxMoves
         };
         
-        const response = await fetch(`${API_URL}/tournament`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        const results = await response.json();
-        
-        let msg = `Tournament Complete! (${results.matches_played} total games)\n\n--- Elo Changes ---\n`;
-        for (const [botId, elo] of Object.entries(results.final_elos)) {
-             msg += `${botId}: ${elo}\n`;
+        try {
+            const response = await fetch(`${API_URL}/simulate-match`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            
+            // Record outcomes locally
+            if (data.winner_id === bot1) {
+                botRecords[bot1].w += 1;
+                botRecords[bot2].l += 1;
+            } else if (data.winner_id === bot2) {
+                botRecords[bot2].w += 1;
+                botRecords[bot1].l += 1;
+            } else {
+                botRecords[bot1].d += 1;
+                botRecords[bot2].d += 1;
+            }
+            
+            // Update live elos
+            botRecords[bot1].elo = Math.round(data.new_elo_1);
+            botRecords[bot2].elo = Math.round(data.new_elo_2);
+            
+            renderStandings();
+            
+        } catch (e) {
+            console.error("Match failed:", e);
+            tProgressLog.textContent = "Error simulating match. Discarding.";
         }
-        
-        msg += `\n--- Matchups ---\n`;
-        results.matchups.forEach(m => {
-             msg += `${m.matchup} -> W1: ${m.bot1_wins}, W2: ${m.bot2_wins}, D: ${m.draws}\n`;
-        });
-        
-        alert(msg);
-        
-        // Refresh bots array to get new Elos
-        await initializeApp(); 
-        
-    } catch(err) {
-        console.error("Tournament Failed", err);
-        alert("Tournament Failed. Check console.");
-    } finally {
-        loadingOverlay.classList.add('hidden');
-        document.querySelector('#loading-overlay p').textContent = "Bot is thinking...";
     }
+    
+    tProgressLog.innerHTML = `<strong>Tournament Complete!</strong> Simulated ${totalGames} games natively.`;
+    tStatus.textContent = "FINISHED";
+    tStatus.style.color = "#ff3366";
+    
+    // Re-enable UI
+    tourneyActive = false;
+    tStartBtn.disabled = false;
+    tResetBtn.disabled = false;
+    tCloseBtn.disabled = false;
+    
+    // Refresh the main app combo boxes
+    await initializeApp();
 }
 
 async function startGame() {

@@ -87,6 +87,13 @@ class TournamentRequest(BaseModel):
     temperature: float = 0.5
     max_moves: int = 150 # Prevent infinite loops
 
+class SimulateMatchRequest(BaseModel):
+    bot1_id: str
+    bot2_id: str
+    search_depth: int = 20
+    temperature: float = 0.5
+    max_moves: int = 150
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
@@ -101,6 +108,15 @@ def get_bots():
         bot_info["elo"] = elo_ratings.get(bot_id, 1000)
         bots_payload.append(bot_info)
     return {"bots": bots_payload}
+
+@app.post("/api/reset-elos")
+def reset_elos():
+    global elo_ratings
+    elo_ratings = {bot_id: 1000.0 for bot_id in bot_metadata.keys()}
+    ranking = EloRanking(alpha=0.01)
+    ranking.ratings = elo_ratings
+    ranking.save("backend/elo_ratings.json")
+    return {"status": "ok"}
 
 @app.post("/api/start", response_model=GameState)
 def start_game():
@@ -221,6 +237,58 @@ def get_win_probability(req: WinProbRequest):
     win_prob = (value + 1.0) / 2.0 
     
     return {"win_probability": win_prob}
+
+@app.post("/api/simulate-match")
+def simulate_match(req: SimulateMatchRequest):
+    if req.bot1_id not in mcts_agents or req.bot2_id not in mcts_agents:
+        raise HTTPException(status_code=404, detail="One or more Bot IDs not found")
+        
+    agent1 = mcts_agents[req.bot1_id]
+    agent2 = mcts_agents[req.bot2_id]
+    
+    env = CheckersEnvironment()
+    move_count = 0
+    
+    while env.winner is None and move_count < req.max_moves:
+        valid_moves = env.get_valid_moves()
+        if not valid_moves:
+            break
+            
+        current_agent = agent1 if env.current_player == P1 else agent2
+        
+        if current_agent == "RANDOM":
+            import random
+            move = random.choice(valid_moves)
+        else:
+            current_agent.num_simulations = req.search_depth
+            move, _ = current_agent.get_action_prob(env.get_state(), temperature=req.temperature)
+            if move is None:
+                break
+                
+        env.make_move(move)
+        move_count += 1
+        
+    ranking = EloRanking(alpha=0.01)
+    ranking.ratings = elo_ratings
+    
+    if env.winner == P1:
+         ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=1.0)
+         winner_id = req.bot1_id
+    elif env.winner == P2:
+         ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=0.0)
+         winner_id = req.bot2_id
+    else:
+         ranking.update_ratings(req.bot1_id, req.bot2_id, outcome_i=0.5)
+         winner_id = "Draw"
+         
+    ranking.save("backend/elo_ratings.json")
+    
+    return {
+        "winner_id": winner_id,
+        "moves": move_count,
+        "new_elo_1": ranking.get_rating(req.bot1_id),
+        "new_elo_2": ranking.get_rating(req.bot2_id)
+    }
 
 @app.post("/api/tournament")
 def run_tournament(req: TournamentRequest):
