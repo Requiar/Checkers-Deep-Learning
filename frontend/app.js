@@ -48,6 +48,7 @@ const tProgressLog = document.getElementById('t-progress-log');
 const tStandingsBody = document.getElementById('t-standings-body');
 
 let tourneyActive = false;
+let tourneyStopped = false;
 let botRecords = {}; // { bot_id: { w:0, l:0, d:0, elo:1000 } }
 
 // Board Represents
@@ -184,7 +185,13 @@ tResetBtn.addEventListener('click', async () => {
     }
 });
 
-tStartBtn.addEventListener('click', startLiveTournament);
+tStartBtn.addEventListener('click', () => {
+    if (tourneyActive) {
+        tourneyStopped = true;
+    } else {
+        startLiveTournament();
+    }
+});
 btnStart.addEventListener('click', startGame);
 
 async function updateWinProbability() {
@@ -234,11 +241,13 @@ async function startLiveTournament() {
     }
     
     tourneyActive = true;
-    tStartBtn.disabled = true;
+    tourneyStopped = false;
+    tStartBtn.textContent = "Stop";
+    tStartBtn.style.background = "#ff3366";
     tResetBtn.disabled = true;
     tCloseBtn.disabled = true;
     tStatus.textContent = "RUNNING";
-    tStatus.style.color = "#00f2fe";
+    tStatus.style.color = "#d4a843";
     
     const gamesPerPair = parseInt(tGamesInput.value);
     const maxMoves = parseInt(tMovesInput.value);
@@ -261,6 +270,7 @@ async function startLiveTournament() {
     let gamesPlayed = 0;
     
     for (const [bot1, bot2] of schedule) {
+        if (tourneyStopped) break;
         gamesPlayed++;
         const n1 = botRecords[bot1].name;
         const n2 = botRecords[bot2].name;
@@ -307,13 +317,18 @@ async function startLiveTournament() {
         }
     }
     
-    tProgressLog.innerHTML = `<strong>Tournament Complete!</strong> Simulated ${totalGames} games natively.`;
-    tStatus.textContent = "FINISHED";
-    tStatus.style.color = "#ff3366";
+    const label = tourneyStopped 
+        ? `Tournament Stopped after ${gamesPlayed - 1} of ${totalGames} games.` 
+        : `Tournament Complete! Simulated ${totalGames} games.`;
+    tProgressLog.innerHTML = `<strong>${label}</strong>`;
+    tStatus.textContent = tourneyStopped ? "STOPPED" : "FINISHED";
+    tStatus.style.color = "#c0392b";
     
     // Re-enable UI
     tourneyActive = false;
     tStartBtn.disabled = false;
+    tStartBtn.textContent = "Start Stream";
+    tStartBtn.style.background = '';
     tResetBtn.disabled = false;
     tCloseBtn.disabled = false;
     
