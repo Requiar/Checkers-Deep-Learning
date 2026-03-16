@@ -2,7 +2,11 @@ const API_URL = 'http://localhost:8000/api';
 
 let gameState = null;
 let selectedPiece = null;
-let validMoveDestinations = {};
+let validMoves = []; // List of all valid move objects for the current turn
+let validDestinationsMap = {}; // Maps `${startR},${startC}` to a list of allowed end coordinates
+
+// Player Color Preference
+let playerIsRed = true; 
 
 // Board Representation Map
 const EMPTY = 0;
@@ -14,11 +18,22 @@ const P2_KING = 4;
 const boardElement = document.getElementById('checkers-board');
 const statusText = document.getElementById('game-status-text');
 const btnStart = document.getElementById('btn-start');
+const colorToggle = document.getElementById('color-toggle');
+const legendP1Text = document.getElementById('legend-p1-text');
+const legendP2Text = document.getElementById('legend-p2-text');
 const tempSlider = document.getElementById('temperature-slider');
 const tempValue = document.getElementById('temp-value');
 const loadingOverlay = document.getElementById('loading-overlay');
 
 // UI Init
+colorToggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    playerIsRed = !playerIsRed;
+    colorToggle.textContent = playerIsRed ? "Play as White instead" : "Play as Red instead";
+    legendP1Text.textContent = playerIsRed ? "You (Red)" : "Bot (Red)";
+    legendP2Text.textContent = playerIsRed ? "Bot (White)" : "You (White)";
+});
+
 tempSlider.addEventListener('input', (e) => {
     tempValue.textContent = e.target.value;
 });
@@ -29,25 +44,59 @@ async function startGame() {
     try {
         const response = await fetch(`${API_URL}/start`, { method: 'POST' });
         gameState = await response.json();
-        renderBoard();
-        updateStatus();
+        
+        // If player chose white, let AI move first
+        if (!playerIsRed) {
+            await fetchValidMoves(); // Even if it's the bot's turn, we can fetch
+            requestBotMove();
+        } else {
+            await fetchValidMoves();
+            renderBoard();
+            updateStatus();
+        }
     } catch (err) {
         console.error("Failed to start game:", err);
         statusText.textContent = "Server Error";
     }
 }
 
+async function fetchValidMoves() {
+    if (!gameState || gameState.winner !== null) return;
+    try {
+        const response = await fetch(`${API_URL}/valid-moves`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(gameState)
+        });
+        const data = await response.json();
+        validMoves = data.moves;
+        
+        validDestinationsMap = {};
+        for (const m of validMoves) {
+            const startKey = `${m.start[0]},${m.start[1]}`;
+            if (!validDestinationsMap[startKey]) {
+                validDestinationsMap[startKey] = [];
+            }
+            validDestinationsMap[startKey].push(m);
+        }
+    } catch (err) {
+        console.error("Failed to fetch valid moves:", err);
+    }
+}
+
 function renderBoard() {
     boardElement.innerHTML = '';
-    validMoveDestinations = {};
     
-    // We only need to compute valid destinations if a piece is selected
-    if (selectedPiece && gameState.current_player === P1) {
-        // Since we don't have a get_valid_moves API endpoint right now, 
-        // the simplest frontend implementation is to let the user click anywhere
-        // and let the backend reject invalid moves. 
-        // For a better UX, we'd add an endpoint or duplicate move logic in JS.
-        // For this demo, we'll implement optimistic clicking.
+    // Determine the mapped perspective
+    const playerPerspective = playerIsRed ? P1 : P2;
+    const botPerspective = playerIsRed ? P2 : P1;
+
+    let allowedDestinations = [];
+    if (selectedPiece) {
+        const startKey = `${selectedPiece.r},${selectedPiece.c}`;
+        if (validDestinationsMap[startKey]) {
+            allowedDestinations = validDestinationsMap[startKey].map(m => `${m.end[0]},${m.end[1]}`);
+        }
     }
 
     for (let r = 0; r < 8; r++) {
@@ -61,6 +110,12 @@ function renderBoard() {
                 cell.classList.add('cell', 'light');
             } else {
                 cell.classList.add('cell', 'dark');
+                
+                // Highlight if it's a valid destination for the selected piece
+                if (allowedDestinations.includes(`${r},${c}`)) {
+                     cell.classList.add('highlight');
+                }
+                
                 // Only dark squares can contain pieces and be clicked
                 cell.addEventListener('click', () => handleCellClick(r, c));
             }
@@ -71,6 +126,11 @@ function renderBoard() {
                 piece.classList.add('piece');
                 piece.classList.add('anim-enter');
                 
+                // Color mapping: P1 is always visually at the bottom, P2 at the top.
+                // Wait, if playerIsRed=false, they are P2. 
+                // But the backend `checkers_logic` handles moves strictly with P1 going "up" (decreasing row)
+                // and P2 going "down" (increasing row). 
+                // To keep this simple visually, we just map the colors.
                 if (pieceVal === P1 || pieceVal === P1_KING) piece.classList.add('p1');
                 if (pieceVal === P2 || pieceVal === P2_KING) piece.classList.add('p2');
                 if (pieceVal === P1_KING || pieceVal === P2_KING) piece.classList.add('king');
@@ -88,12 +148,17 @@ function renderBoard() {
 }
 
 async function handleCellClick(r, c) {
-    if (!gameState || gameState.winner !== null || gameState.current_player !== P1) return;
+    if (!gameState || gameState.winner !== null) return;
+    
+    const pID = playerIsRed ? P1 : P2;
+    if (gameState.current_player !== pID) return;
 
     const pieceVal = gameState.board[r][c];
     
     // Selecting own piece
-    if (pieceVal === P1 || pieceVal === P1_KING) {
+    if ((pID === P1 && (pieceVal === P1 || pieceVal === P1_KING)) || 
+        (pID === P2 && (pieceVal === P2 || pieceVal === P2_KING))) {
+            
         selectedPiece = { r, c };
         renderBoard();
         return;
@@ -101,26 +166,26 @@ async function handleCellClick(r, c) {
 
     // Moving selected piece to empty dark square
     if (selectedPiece && pieceVal === EMPTY) {
-        // We try to make the move. The backend validates it.
-        // For a real game, you would pass the full jump path if it was a multi-jump.
-        // To keep this simple we just pass start and end, and let backend figure out jumps
-        // (Our backend currently expects explicit jumps, but we will simplify the FE by just
-        // trying single leaps. If a user tries a jump, we attempt to deduce the jumped piece).
+        // Find the exact valid move
+        const startKey = `${selectedPiece.r},${selectedPiece.c}`;
+        const possibleMoves = validDestinationsMap[startKey] || [];
         
-        await attemptMove(selectedPiece.r, selectedPiece.c, r, c);
+        const matchedMove = possibleMoves.find(m => m.end[0] === r && m.end[1] === c);
+        
+        if (matchedMove) {
+             await attemptMove(matchedMove);
+        } else {
+             // Clicked an invalid empty square; deselect
+             selectedPiece = null;
+             renderBoard();
+        }
     }
 }
 
-async function attemptMove(startR, startC, endR, endC) {
-    // Quick heuristic to find jumped piece for simple 1-step jumps
-    let jumps = [];
-    if (Math.abs(startR - endR) === 2) {
-        jumps.push([(startR + endR)/2, (startC + endC)/2]);
-    }
-    
+async function attemptMove(moveObj) {
     const movePayload = {
         state: gameState,
-        move: { start: [startR, startC], end: [endR, endC], jumps: jumps }
+        move: moveObj
     };
 
     try {
@@ -139,10 +204,14 @@ async function attemptMove(startR, startC, endR, endC) {
 
         gameState = await response.json();
         selectedPiece = null;
+        await fetchValidMoves();
         renderBoard();
         updateStatus();
 
-        if (gameState.winner === null && gameState.current_player === P2) {
+        const pID = playerIsRed ? P1 : P2;
+        const botID = playerIsRed ? P2 : P1;
+
+        if (gameState.winner === null && gameState.current_player === botID) {
             requestBotMove();
         }
     } catch (err) {
@@ -169,8 +238,9 @@ async function requestBotMove() {
         gameState = data.new_state;
         
         // Minor delay for better UX
-        setTimeout(() => {
+        setTimeout(async () => {
             loadingOverlay.classList.add('hidden');
+            await fetchValidMoves();
             renderBoard();
             updateStatus();
         }, 500);
@@ -183,14 +253,16 @@ async function requestBotMove() {
 }
 
 function updateStatus() {
-    if (gameState.winner === P1) {
+    const pID = playerIsRed ? P1 : P2;
+    if (gameState.winner === pID) {
         statusText.textContent = "You Win! 🎉";
         statusText.style.color = "#00f2fe";
-    } else if (gameState.winner === P2) {
+    } else if (gameState.winner !== null && gameState.winner !== pID) {
         statusText.textContent = "Bot Wins! 🤖";
         statusText.style.color = "#ff3366";
     } else {
-        statusText.textContent = gameState.current_player === P1 ? "Your Turn (Red)" : "Bot's Turn (White)";
+        const turnText = gameState.current_player === pID ? "Your Turn" : "Bot's Turn";
+        statusText.textContent = turnText;
         statusText.style.color = "var(--text-secondary)";
     }
 }

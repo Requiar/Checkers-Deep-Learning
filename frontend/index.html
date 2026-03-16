@@ -33,16 +33,19 @@
           
           <div class="slider-group">
             <div class="slider-header">
-              <label for="temperature-slider">Bot Temperature ($\tau$)</label>
+              <label for="temperature-slider">Bot Temperature (τ)</label>
               <span id="temp-value" class="badge">0.5</span>
             </div>
             <input type="range" id="temperature-slider" min="0" max="2" step="0.1" value="0.5">
             <p class="help-text">Controls stochasticity. 0 = Greedy Play, >1 = Random/Exploratory</p>
           </div>
           
-          <div class="legend">
-            <div class="legend-item"><div class="piece p1"></div><span>You (Red)</span></div>
-            <div class="legend-item"><div class="piece p2"></div><span>Bot (White)</span></div>
+          <div class="legend" style="align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 1.5rem;">
+                <div class="legend-item"><div class="piece p1"></div><span id="legend-p1-text">You (Red)</span></div>
+                <div class="legend-item"><div class="piece p2"></div><span id="legend-p2-text">Bot (White)</span></div>
+            </div>
+            <a href="#" id="color-toggle" style="font-size: 0.8rem; color: var(--secondary-color); text-decoration: none;">Play as White instead</a>
           </div>
         </div>
 

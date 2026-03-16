@@ -52,22 +52,50 @@ def start_game():
     env = CheckersEnvironment()
     return env.get_state()
 
+@app.post("/api/valid-moves")
+def get_valid_moves(req: GameState):
+    env = CheckersEnvironment()
+    env.set_state(req.dict())
+    moves = env.get_valid_moves()
+    
+    # Format moves for JSON 
+    formatted_moves = []
+    for m in moves:
+        formatted_moves.append({
+            "start": list(m["start"]),
+            "end": list(m["end"]),
+            "jumps": [list(j) for j in m.get("jumps", [])]
+        })
+    return {"moves": formatted_moves}
+
 @app.post("/api/move")
 def make_move(req: MoveRequest):
     env = CheckersEnvironment()
     state_dict = req.state.dict()
     env.set_state(state_dict)
     
-    # We need to convert list coordinates back to tuples
     formatted_move = {
         "start": tuple(req.move["start"]),
         "end": tuple(req.move["end"]),
         "jumps": [tuple(j) for j in req.move.get("jumps", [])]
     }
     
+    # Strictly validate against engine's legal moves
+    valid_moves = env.get_valid_moves()
+    is_legal = False
+    for vm in valid_moves:
+        if vm["start"] == formatted_move["start"] and vm["end"] == formatted_move["end"]:
+            # Also require jumps to match to prevent skipping multi-jumps
+            if set(vm.get("jumps", [])) == set(formatted_move.get("jumps", [])):
+                is_legal = True
+                break
+                
+    if not is_legal:
+         raise HTTPException(status_code=400, detail="Move is strictly illegal")
+    
     success = env.make_move(formatted_move)
     if not success:
-        raise HTTPException(status_code=400, detail="Invalid move or game over")
+        raise HTTPException(status_code=400, detail="State error applying move")
         
     return env.get_state()
 
