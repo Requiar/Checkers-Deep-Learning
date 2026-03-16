@@ -23,14 +23,9 @@
       </div>
 
       <aside class="control-panel glassmorphism">
-        <div class="status-box" style="margin-bottom: 1rem;">
+        <div class="status-box">
           <h2>Game Status</h2>
           <p id="game-status-text">Waiting to Start</p>
-          <div class="history-controls" style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem;">
-            <button id="btn-prev" class="btn" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Prev</button>
-            <button id="btn-current" class="btn primary" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Live</button>
-            <button id="btn-next" class="btn" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Next</button>
-          </div>
         </div>
 
         <div class="controls">
@@ -51,6 +46,15 @@
                 <div class="legend-item"><div class="piece p2"></div><span id="legend-p2-text">Bot (White)</span></div>
             </div>
             <a href="#" id="color-toggle" style="font-size: 0.8rem; color: var(--secondary-color); text-decoration: none;">Play as White instead</a>
+          </div>
+          
+          <div class="history-panel" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--glass-border);">
+            <h3 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase;">Review Past Moves</h3>
+            <div class="history-controls" style="display: flex; gap: 0.5rem; justify-content: center;">
+              <button id="btn-prev" class="btn" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Prev</button>
+              <button id="btn-current" class="btn primary" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Live</button>
+              <button id="btn-next" class="btn" style="flex: 1; padding: 6px; font-size: 0.8rem;" disabled>Next</button>
+            </div>
           </div>
         </div>
 

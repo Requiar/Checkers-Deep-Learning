@@ -46,6 +46,7 @@ if (btnPrev) {
             currentHistoryIndex--;
             gameState = JSON.parse(JSON.stringify(stateHistory[currentHistoryIndex]));
             updateHistoryControls();
+            selectedPiece = null;
             renderBoard();
             updateStatus();
         }
@@ -58,6 +59,7 @@ if (btnNext) {
             currentHistoryIndex++;
             gameState = JSON.parse(JSON.stringify(stateHistory[currentHistoryIndex]));
             updateHistoryControls();
+            selectedPiece = null;
             renderBoard();
             updateStatus();
         }
@@ -69,6 +71,7 @@ if (btnCurrent) {
         currentHistoryIndex = stateHistory.length - 1;
         gameState = JSON.parse(JSON.stringify(stateHistory[currentHistoryIndex]));
         updateHistoryControls();
+        selectedPiece = null;
         renderBoard();
         updateStatus();
     });
