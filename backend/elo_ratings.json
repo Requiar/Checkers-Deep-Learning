@@ -1,7 +1,7 @@
 {
-    "bot_v1_baseline": 1000.0,
-    "bot_v2_deep": 1000.0,
-    "bot_v3_fast": 1000.0,
-    "bot_v4_dropout": 1000.0,
-    "bot_random": 1000.0
+    "bot_v1_baseline": 1029.8955510497906,
+    "bot_v2_deep": 1013.126023082212,
+    "bot_v3_fast": 955.3610509751868,
+    "bot_v4_dropout": 1001.5137706148652,
+    "bot_random": 1000.1036042779457
 }

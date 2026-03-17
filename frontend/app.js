@@ -126,36 +126,36 @@ detailsCloseBtn.addEventListener('click', () => detailsModal.classList.add('hidd
 
 function showModelDetails(modelId) {
     const model = availableModels.find(m => m.id === modelId);
-    if (!bot) return;
+    if (!model) return;
 
-    detailsTitle.textContent = bot.name;
+    detailsTitle.textContent = model.name;
     
     let html = `
         <div class="details-section-title">Neural Architecture</div>
         <table class="details-table">
-            <tr><th>Hidden Layers</th><td>${bot.config.layers}</td></tr>
-            <tr><th>Channels per Layer</th><td>${bot.config.channels}</td></tr>
-            <tr><th>Dropout Rate</th><td>${bot.config.dropout}</td></tr>
+            <tr><th>Hidden Layers</th><td>${model.config.layers}</td></tr>
+            <tr><th>Channels per Layer</th><td>${model.config.channels}</td></tr>
+            <tr><th>Dropout Rate</th><td>${model.config.dropout}</td></tr>
         </table>
 
         <div class="details-section-title">Training Hyperparameters</div>
         <table class="details-table">
-            <tr><th>Learning Rate</th><td>${bot.config.lr}</td></tr>
-            <tr><th>Discount Factor (γ)</th><td>${bot.config.discount}</td></tr>
-            <tr><th>Epochs</th><td>${bot.config.epochs}</td></tr>
+            <tr><th>Learning Rate</th><td>${model.config.lr}</td></tr>
+            <tr><th>Discount Factor (γ)</th><td>${model.config.discount}</td></tr>
+            <tr><th>Epochs</th><td>${model.config.epochs}</td></tr>
         </table>
         
         <div class="details-section-title">Dataset & Generation</div>
         <table class="details-table">
-            <tr><th>Training Samples</th><td>${bot.training_samples.toLocaleString()}</td></tr>
-            <tr><th>Self-Play Games</th><td>${bot.config.num_games}</td></tr>
-            <tr><th>MCTS Sim Depth</th><td>${bot.config.gen_depth}</td></tr>
+            <tr><th>Training Samples</th><td>${model.training_samples.toLocaleString()}</td></tr>
+            <tr><th>Self-Play Games</th><td>${model.config.num_games}</td></tr>
+            <tr><th>MCTS Sim Depth</th><td>${model.config.gen_depth}</td></tr>
         </table>
 
         <div class="details-section-title">Performance Metrics</div>
         <table class="details-table">
-            <tr><th>Final Training Loss</th><td>${bot.final_train_loss.toFixed(6)}</td></tr>
-            <tr><th>Final Validation Loss</th><td>${bot.final_val_loss.toFixed(6)}</td></tr>
+            <tr><th>Final Training Loss</th><td>${model.final_train_loss.toFixed(6)}</td></tr>
+            <tr><th>Final Validation Loss</th><td>${model.final_val_loss.toFixed(6)}</td></tr>
         </table>
     `;
     
